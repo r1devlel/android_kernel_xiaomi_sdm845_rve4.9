@@ -1,0 +1,75 @@
+name: Kernel Build - BPF Port
+
+on:
+  push:
+    branches:
+      - bpf-port-stage1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison flex cpio \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            clang-18 lld-18 llvm-18 \
+            libssl-dev libelf-dev libncurses-dev \
+            dwarves pahole
+
+      - name: Show toolchain
+        run: |
+          clang-18 --version
+          aarch64-linux-gnu-gcc --version
+          make --version
+
+      - name: Prepare output
+        run: |
+          rm -rf out
+          mkdir -p out
+
+      - name: Generate defconfig
+        run: |
+          make O=out ARCH=arm64 sdm845-perf_defconfig
+
+      - name: Build kernel
+        run: |
+          make -j"$(nproc)" O=out ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CC=clang-18 \
+            LD=ld.lld-18 \
+            AR=llvm-ar-18 \
+            NM=llvm-nm-18 \
+            OBJCOPY=llvm-objcopy-18 \
+            OBJDUMP=llvm-objdump-18 \
+            STRIP=llvm-strip-18 \
+            LLVM_IAS=0 \
+            V=1
+
+      - name: Check output
+        run: |
+          test -s out/arch/arm64/boot/Image
+          ls -lh out/arch/arm64/boot/Image
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpf-port-kernel
+          path: |
+            out/arch/arm64/boot/Image
+            out/.config
+          retention-days: 7
