@@ -20,6 +20,7 @@
 #include <linux/if_vlan.h>
 #include <linux/vmalloc.h>
 #include <linux/sockptr.h>
+#include <linux/bpf.h>
 
 #include <net/sch_generic.h>
 
