@@ -859,3 +859,9 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
 	 BUILD_BUG_ON_ZERO((perms) & 2) +					\
 	 (perms))
 #endif
+
+
+/* BPF backport compatibility: migration annotation used by modern filter code. */
+#ifndef cant_migrate
+#define cant_migrate() do { } while (0)
+#endif
