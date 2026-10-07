@@ -14,6 +14,7 @@
 #include <linux/printk.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
+#include <linux/preempt.h>
 #include <linux/capability.h>
 #include <linux/cryptohash.h>
 #include <linux/kallsyms.h>
