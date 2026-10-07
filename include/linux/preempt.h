@@ -305,6 +305,10 @@ static inline void preempt_notifier_init(struct preempt_notifier *notifier,
 
 #endif /* __LINUX_PREEMPT_H */
 
+/* BPF backport compatibility: 4.9 has no cant_migrate annotation. */
+#ifndef cant_migrate
+#define cant_migrate() do { } while (0)
+#endif
 
 /* BPF backport compatibility: 4.9 has no migrate_disable API. */
 #ifndef migrate_disable
