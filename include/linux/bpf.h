@@ -21,6 +21,7 @@
 #include <linux/kallsyms.h>
 #include <linux/capability.h>
 #include <linux/percpu-refcount.h>
+#include <linux/preempt.h>
 
 struct bpf_verifier_env;
 struct bpf_verifier_log;
