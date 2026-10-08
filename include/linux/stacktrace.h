@@ -19,16 +19,9 @@ extern void save_stack_trace_regs(struct pt_regs *regs,
 				  struct stack_trace *trace);
 extern void save_stack_trace_tsk(struct task_struct *tsk,
 				struct stack_trace *trace);
-extern int save_stack_trace_tsk_reliable(struct task_struct *tsk,
-					 struct stack_trace *trace);
-
-unsigned int stack_trace_save(unsigned long *store, unsigned int size,
-			      unsigned int skipnr);
 unsigned int stack_trace_save_tsk(struct task_struct *task,
 				  unsigned long *store, unsigned int size,
 				  unsigned int skipnr);
-unsigned int stack_trace_save_regs(struct pt_regs *regs, unsigned long *store,
-				   unsigned int size, unsigned int skipnr);
 
 extern void print_stack_trace(struct stack_trace *trace, int spaces);
 extern int snprint_stack_trace(char *buf, size_t size,
@@ -48,18 +41,6 @@ extern void save_stack_trace_user(struct stack_trace *trace);
 # define save_stack_trace_user(trace)			do { } while (0)
 # define print_stack_trace(trace, spaces)		do { } while (0)
 # define snprint_stack_trace(buf, size, trace, spaces)	do { } while (0)
-#endif
-
-#if defined(CONFIG_STACKTRACE) && defined(CONFIG_HAVE_RELIABLE_STACKTRACE)
-int stack_trace_save_tsk_reliable(struct task_struct *tsk, unsigned long *store,
-				  unsigned int size);
-#else
-static inline int stack_trace_save_tsk_reliable(struct task_struct *tsk,
-					unsigned long *store,
-					unsigned int size)
-{
-	return -ENOSYS;
-}
 #endif
 
 #endif
