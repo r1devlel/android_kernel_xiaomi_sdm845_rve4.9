@@ -1,39 +1,19 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _IPV6_STUBS_H
 #define _IPV6_STUBS_H
 
 #include <linux/in6.h>
+#include <linux/types.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
-#include <net/dst.h>
-#include <net/flow.h>
-#include <net/neighbour.h>
 #include <net/sock.h>
+#include <net/udp.h>
 
-/* structs from net/ip6_fib.h */
-struct fib6_info;
-
-/* A stub used by vxlan module. This is ugly, ideally these
- * symbols should be built into the core kernel.
+/*
+ * BPF IPv6 socket helper interface.
+ *
+ * The 4.9 tree already defines struct ipv6_stub in addrconf.h,
+ * so this header only carries the BPF-specific stub introduced by mido.
  */
-struct ipv6_stub {
-	int (*ipv6_sock_mc_join)(struct sock *sk, int ifindex,
-				 const struct in6_addr *addr);
-	int (*ipv6_sock_mc_drop)(struct sock *sk, int ifindex,
-				 const struct in6_addr *addr);
-	struct dst_entry *(*ipv6_dst_lookup_flow)(struct net *net,
-						  const struct sock *sk,
-						  struct flowi6 *fl6,
-						  const struct in6_addr *final_dst);
-	void (*udpv6_encap_enable)(void);
-	void (*ndisc_send_na)(struct net_device *dev, const struct in6_addr *daddr,
-			      const struct in6_addr *solicited_addr,
-			      bool router, bool solicited, bool override, bool inc_opt);
-	struct neigh_table *nd_tbl;
-};
-extern const struct ipv6_stub *ipv6_stub __read_mostly;
-
-/* A stub used by bpf helpers. Similarly ugly as ipv6_stub */
 struct ipv6_bpf_stub {
 	int (*inet6_bind)(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 			  u32 flags);
@@ -43,6 +23,7 @@ struct ipv6_bpf_stub {
 					int dif, int sdif, struct udp_table *tbl,
 					struct sk_buff *skb);
 };
+
 extern const struct ipv6_bpf_stub *ipv6_bpf_stub __read_mostly;
 
 #endif
