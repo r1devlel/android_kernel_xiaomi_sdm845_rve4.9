@@ -1030,3 +1030,21 @@ static inline long long atomic64_fetch_andnot_release(long long i, atomic64_t *v
 #include <asm-generic/atomic-long.h>
 
 #endif /* _LINUX_ATOMIC_H */
+
+
+#ifndef atomic64_fetch_add_unless
+#define atomic64_fetch_add_unless(v, a, u) \\
+({ \\
+	long long __old = atomic64_read(v); \\
+	for (;;) { \\
+		long long __new; \\
+		if (__old == (u)) \\
+			break; \\
+		__new = __old + (a); \\
+		if (atomic64_cmpxchg((v), __old, __new) == __old) \\
+			break; \\
+		__old = atomic64_read(v); \\
+	} \\
+	__old; \\
+})
+#endif
