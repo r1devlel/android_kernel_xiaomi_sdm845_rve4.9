@@ -113,7 +113,7 @@ int bpf_analyzer(struct bpf_prog *prog, const struct bpf_ext_analyzer_ops *ops,
 static inline u64 bpf_trampoline_compute_key(const struct bpf_prog *tgt_prog,
 					     u32 btf_id)
 {
-	return (u64)(unsigned long)tgt_prog ^ btf_id;
+	return tgt_prog ? (((u64)tgt_prog->aux->id) << 32 | btf_id) : btf_id;
 }
 
 int bpf_check_attach_target(struct bpf_verifier_log *log,
