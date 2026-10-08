@@ -391,6 +391,18 @@ static inline struct neighbour *__ipv6_neigh_lookup(struct net_device *dev, cons
 	return n;
 }
 
+static inline struct neighbour *ip_neigh_gw6(struct net_device *dev,
+					     const void *addr)
+{
+	struct neighbour *neigh;
+
+	neigh = __ipv6_neigh_lookup_noref(dev, addr);
+	if (unlikely(!neigh))
+		neigh = __neigh_create(&nd_tbl, addr, dev, false);
+
+	return neigh;
+}
+
 int ndisc_init(void);
 int ndisc_late_init(void);
 
