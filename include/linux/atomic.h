@@ -1036,14 +1036,21 @@ static inline long long atomic64_fetch_andnot_release(long long i, atomic64_t *v
 static inline long long atomic64_fetch_add_unless(atomic64_t *v, long long a,
 						  long long u)
 {
-	long long c = atomic64_read(v);
+	long long old = atomic64_read(v);
 
-	do {
-		if (unlikely(c == u))
-			break;
-		c = atomic64_cmpxchg(v, c, c + a);
-	} while (c != atomic64_read(v));
+	for (;;) {
+		long long newv;
+		long long prev;
 
-	return c;
+		if (unlikely(old == u))
+			return old;
+
+		newv = old + a;
+		prev = atomic64_cmpxchg(v, old, newv);
+		if (prev == old)
+			return old;
+
+		old = prev;
+	}
 }
 #endif
