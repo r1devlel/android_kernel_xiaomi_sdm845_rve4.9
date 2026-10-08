@@ -11,6 +11,8 @@
  *	2 of the License, or (at your option) any later version.
  */
 
+#define _LINUX_SKBUFF_H
+
 /* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet. */
 static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
 {
@@ -18,7 +20,6 @@ static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
 }
 
 #ifndef _LINUX_SKBUFF_H
-#define _LINUX_SKBUFF_H
 
 #include <linux/kernel.h>
 #include <linux/kmemcheck.h>
