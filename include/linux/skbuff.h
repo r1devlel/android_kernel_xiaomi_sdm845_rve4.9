@@ -20,8 +20,6 @@ static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
 	return 0;
 }
 
-#ifndef _LINUX_SKBUFF_H
-
 #include <linux/kernel.h>
 #include <linux/kmemcheck.h>
 #include <linux/compiler.h>
