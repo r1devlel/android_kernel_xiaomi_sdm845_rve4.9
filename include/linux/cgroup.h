@@ -285,7 +285,8 @@ void css_task_iter_end(struct css_task_iter *it);
 
 static inline u64 cgroup_id(struct cgroup *cgrp)
 {
-	return cgrp->kn->id;
+	/* 4.9 keeps the cgroup ID in struct cgroup rather than kernfs_node. */
+	return cgrp->id;
 }
 
 
