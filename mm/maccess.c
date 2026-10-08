@@ -252,3 +252,29 @@ long strnlen_unsafe_user(const void __user *unsafe_addr, long count)
 
 	return ret;
 }
+
+
+bool __weak copy_from_kernel_nofault_allowed(const void *unsafe_src, size_t size)
+{
+	return true;
+}
+EXPORT_SYMBOL_GPL(copy_from_kernel_nofault_allowed);
+
+long copy_from_kernel_nofault(void *dst, const void *src, size_t size)
+{
+	long ret;
+	mm_segment_t old_fs = get_fs();
+
+	if (!copy_from_kernel_nofault_allowed(src, size))
+		return -ERANGE;
+
+	set_fs(KERNEL_DS);
+	pagefault_disable();
+	ret = __copy_from_user_inatomic(dst,
+		(__force const void __user *)src, size);
+	pagefault_enable();
+	set_fs(old_fs);
+
+	return ret ? -EFAULT : 0;
+}
+EXPORT_SYMBOL_GPL(copy_from_kernel_nofault);
