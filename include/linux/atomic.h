@@ -1029,9 +1029,6 @@ static inline long long atomic64_fetch_andnot_release(long long i, atomic64_t *v
 
 #include <asm-generic/atomic-long.h>
 
-#endif /* _LINUX_ATOMIC_H */
-
-
 #ifndef atomic64_fetch_add_unless
 static inline long long atomic64_fetch_add_unless(atomic64_t *v, long long a,
 						  long long u)
@@ -1054,3 +1051,5 @@ static inline long long atomic64_fetch_add_unless(atomic64_t *v, long long a,
 	}
 }
 #endif
+
+#endif /* _LINUX_ATOMIC_H */
