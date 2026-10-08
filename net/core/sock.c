@@ -135,6 +135,9 @@
 
 #include <linux/filter.h>
 #include <net/sock_reuseport.h>
+#ifdef CONFIG_BPF_SYSCALL
+#include <net/bpf_sk_storage.h>
+#endif
 
 #include <trace/events/sock.h>
 
@@ -1441,6 +1444,10 @@ static void __sk_destruct(struct rcu_head *head)
 
 	sock_disable_timestamp(sk, SK_FLAGS_TIMESTAMP);
 
+#ifdef CONFIG_BPF_SYSCALL
+	bpf_sk_storage_free(sk);
+#endif
+
 	if (atomic_read(&sk->sk_omem_alloc))
 		pr_debug("%s: optmem leakage (%d bytes) detected\n",
 			 __func__, atomic_read(&sk->sk_omem_alloc));
@@ -1572,6 +1579,18 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 			goto out;
 		}
 		RCU_INIT_POINTER(newsk->sk_reuseport_cb, NULL);
+
+#ifdef CONFIG_BPF_SYSCALL
+		RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
+
+		if (bpf_sk_storage_clone(sk, newsk)) {
+			newsk->sk_destruct = NULL;
+			bh_unlock_sock(newsk);
+			sk_free(newsk);
+			newsk = NULL;
+			goto out;
+		}
+#endif
 
 		newsk->sk_err	   = 0;
 		newsk->sk_err_soft = 0;
