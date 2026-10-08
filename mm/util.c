@@ -18,6 +18,26 @@
 
 #include "internal.h"
 
+void *kvmalloc_node(size_t size, gfp_t flags, int node)
+{
+	gfp_t kmalloc_flags = flags;
+	void *ret;
+
+	WARN_ON_ONCE((flags & GFP_KERNEL) != GFP_KERNEL);
+
+	if (size > PAGE_SIZE)
+		kmalloc_flags |= __GFP_NORETRY | __GFP_NOWARN;
+
+	ret = kmalloc_node(size, kmalloc_flags, node);
+	if (ret || size <= PAGE_SIZE)
+		return ret;
+
+	return __vmalloc_node_flags_caller(size, node, flags,
+			__builtin_return_address(0));
+}
+EXPORT_SYMBOL(kvmalloc_node);
+
+
 static inline int is_kernel_rodata(unsigned long addr)
 {
 	return addr >= (unsigned long)__start_rodata &&
