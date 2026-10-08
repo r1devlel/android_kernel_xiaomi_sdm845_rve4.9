@@ -77,40 +77,40 @@ struct bpf_insn_aux_data {
 
 #define MAX_USED_MAPS 64 /* max number of maps accessed by one eBPF program */
 
-#define BPF_VERIFIER_TMP_LOG_SIZE\t1024
+#define BPF_VERIFIER_TMP_LOG_SIZE	1024
 
 struct bpf_verifier_log {
-\tu32 level;
-\tchar kbuf[BPF_VERIFIER_TMP_LOG_SIZE];
-\tchar __user *ubuf;
-\tu32 len_used;
-\tu32 len_total;
+	u32 level;
+	char kbuf[BPF_VERIFIER_TMP_LOG_SIZE];
+	char __user *ubuf;
+	u32 len_used;
+	u32 len_total;
 };
 
 static inline bool bpf_verifier_log_full(const struct bpf_verifier_log *log)
 {
-\treturn log->len_used >= log->len_total - 1;
+	return log->len_used >= log->len_total - 1;
 }
 
-#define BPF_LOG_LEVEL1\t1
-#define BPF_LOG_LEVEL2\t2
-#define BPF_LOG_STATS\t4
-#define BPF_LOG_LEVEL\t(BPF_LOG_LEVEL1 | BPF_LOG_LEVEL2)
-#define BPF_LOG_MASK\t(BPF_LOG_LEVEL | BPF_LOG_STATS)
-#define BPF_LOG_KERNEL\t(BPF_LOG_MASK + 1)
+#define BPF_LOG_LEVEL1	1
+#define BPF_LOG_LEVEL2	2
+#define BPF_LOG_STATS	4
+#define BPF_LOG_LEVEL	(BPF_LOG_LEVEL1 | BPF_LOG_LEVEL2)
+#define BPF_LOG_MASK	(BPF_LOG_LEVEL | BPF_LOG_STATS)
+#define BPF_LOG_KERNEL	(BPF_LOG_MASK + 1)
 
 static inline bool bpf_verifier_log_needed(const struct bpf_verifier_log *log)
 {
-\treturn log &&
-\t\t((log->level && log->ubuf && !bpf_verifier_log_full(log)) ||
-\t\t log->level == BPF_LOG_KERNEL);
+	return log &&
+		((log->level && log->ubuf && !bpf_verifier_log_full(log)) ||
+		 log->level == BPF_LOG_KERNEL);
 }
 
 static inline bool
 bpf_verifier_log_attr_valid(const struct bpf_verifier_log *log)
 {
-\treturn log->len_total >= 128 && log->len_total <= UINT_MAX >> 2 &&
-\t       log->level && log->ubuf && !(log->level & ~BPF_LOG_MASK);
+	return log->len_total >= 128 && log->len_total <= UINT_MAX >> 2 &&
+	       log->level && log->ubuf && !(log->level & ~BPF_LOG_MASK);
 }
 
 
