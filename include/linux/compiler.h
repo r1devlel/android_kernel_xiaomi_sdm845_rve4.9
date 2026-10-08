@@ -100,6 +100,11 @@ extern void __chk_io_ptr(const volatile void __iomem *);
  * specific implementations come from the above header files
  */
 
+/* Backported BPF interpreter jump-table annotation. */
+#ifndef __annotate_jump_table
+#define __annotate_jump_table
+#endif
+
 struct ftrace_branch_data {
 	const char *func;
 	const char *file;
