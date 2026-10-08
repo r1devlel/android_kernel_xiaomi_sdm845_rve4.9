@@ -151,3 +151,6 @@ extern long strnlen_unsafe_user(const void __user *unsafe_addr, long count);
 
 
 extern int check_zeroed_user(const void __user *from, size_t size);
+
+bool copy_from_kernel_nofault_allowed(const void *unsafe_src, size_t size);
+long copy_from_kernel_nofault(void *dst, const void *src, size_t size);
