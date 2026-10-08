@@ -150,32 +150,4 @@ extern long strnlen_unsafe_user(const void __user *unsafe_addr, long count);
 #endif		/* __LINUX_UACCESS_H__ */
 
 
-#ifndef check_zeroed_user
-static inline int check_zeroed_user(const void __user *from, size_t size)
-{
-	unsigned long val;
-	const unsigned char __user *p = from;
-
-	if (!size)
-		return 1;
-
-	while (size >= sizeof(val)) {
-		if (copy_from_user(&val, p, sizeof(val)))
-			return -EFAULT;
-		if (val)
-			return 0;
-		p += sizeof(val);
-		size -= sizeof(val);
-	}
-
-	if (size) {
-		val = 0;
-		if (copy_from_user(&val, p, size))
-			return -EFAULT;
-		if (val)
-			return 0;
-	}
-
-	return 1;
-}
-#endif
+extern int check_zeroed_user(const void __user *from, size_t size);
