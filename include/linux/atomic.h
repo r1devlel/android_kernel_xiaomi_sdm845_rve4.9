@@ -1033,18 +1033,17 @@ static inline long long atomic64_fetch_andnot_release(long long i, atomic64_t *v
 
 
 #ifndef atomic64_fetch_add_unless
-#define atomic64_fetch_add_unless(v, a, u) \\
-({ \\
-	long long __old = atomic64_read(v); \\
-	for (;;) { \\
-		long long __new; \\
-		if (__old == (u)) \\
-			break; \\
-		__new = __old + (a); \\
-		if (atomic64_cmpxchg((v), __old, __new) == __old) \\
-			break; \\
-		__old = atomic64_read(v); \\
-	} \\
-	__old; \\
-})
+static inline long long atomic64_fetch_add_unless(atomic64_t *v, long long a,
+						  long long u)
+{
+	long long c = atomic64_read(v);
+
+	do {
+		if (unlikely(c == u))
+			break;
+		c = atomic64_cmpxchg(v, c, c + a);
+	} while (c != atomic64_read(v));
+
+	return c;
+}
 #endif
