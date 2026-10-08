@@ -145,3 +145,7 @@ do {									\
 #endif	/* __ASSEMBLY__ */
 
 #endif	/* __ASM_BARRIER_H */
+
+#ifndef barrier_nospec
+#define barrier_nospec() csdb()
+#endif
