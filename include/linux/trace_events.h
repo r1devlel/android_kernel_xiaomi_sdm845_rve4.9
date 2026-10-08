@@ -455,6 +455,13 @@ trace_trigger_soft_disabled(struct trace_event_file *file)
 }
 
 #ifdef CONFIG_BPF_EVENTS
+#ifdef CONFIG_BPF_EVENTS
+int bpf_probe_register(struct bpf_raw_event_map *btp, struct bpf_prog *prog);
+int bpf_probe_unregister(struct bpf_raw_event_map *btp, struct bpf_prog *prog);
+struct bpf_raw_event_map *bpf_get_raw_tracepoint(const char *name);
+void bpf_put_raw_tracepoint(struct bpf_raw_event_map *btp);
+#endif
+
 unsigned int trace_call_bpf(struct trace_event_call *call, void *ctx);
 int perf_event_attach_bpf_prog(struct perf_event *event, struct bpf_prog *prog);
 void perf_event_detach_bpf_prog(struct perf_event *event);
