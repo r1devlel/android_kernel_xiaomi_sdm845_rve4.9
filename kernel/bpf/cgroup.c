@@ -14,6 +14,8 @@
 #include <linux/string.h>
 #include <linux/bpf.h>
 #include <linux/bpf-cgroup.h>
+#include <linux/rcupdate.h>
+#include <linux/lockdep.h>
 #include <net/sock.h>
 #include <net/bpf_sk_storage.h>
 
