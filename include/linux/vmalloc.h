@@ -83,6 +83,23 @@ extern void *__vmalloc_node_range(unsigned long size, unsigned long align,
 			pgprot_t prot, unsigned long vm_flags, int node,
 			const void *caller);
 
+/* Compatibility helpers for modern BPF code on 4.9 vmalloc API. */
+static inline void *vmalloc_user_node_flags(unsigned long size, int node,
+						gfp_t flags)
+{
+	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
+					flags, PAGE_KERNEL,
+					VM_USERMAP, node,
+					__builtin_return_address(0));
+}
+
+static inline void *__vmalloc_node_flags_caller(unsigned long size, int node,
+						gfp_t flags, const void *caller)
+{
+	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
+					flags, PAGE_KERNEL, 0, node, caller);
+}
+
 extern void vfree(const void *addr);
 extern void vfree_atomic(const void *addr);
 
