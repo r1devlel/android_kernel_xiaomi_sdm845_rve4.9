@@ -139,6 +139,9 @@ struct net {
 	/* Used to store attached BPF programs */
 	struct netns_bpf	bpf;
 
+	/* Stable per-network-namespace cookie for BPF. */
+	atomic64_t		net_cookie;
+
 	/* Note : following structs are cache line aligned */
 #ifdef CONFIG_XFRM
 	struct netns_xfrm	xfrm;
