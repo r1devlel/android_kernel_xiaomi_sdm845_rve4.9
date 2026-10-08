@@ -86,7 +86,7 @@ struct bpf_prog *bpf_prog_alloc_no_stats(unsigned int size, gfp_t gfp_extra_flag
 	struct bpf_prog *fp;
 
 	size = round_up(size, PAGE_SIZE);
-	fp = __vmalloc(size, gfp_flags);
+	fp = __vmalloc(size, gfp_flags, PAGE_KERNEL_EXEC);
 	if (fp == NULL)
 		return NULL;
 
@@ -289,7 +289,7 @@ int bpf_prog_calc_tag(struct bpf_prog *fp)
 	if (!raw)
 		return -ENOMEM;
 
-	sha1_init(digest);
+	sha_init(digest);
 	memset(ws, 0, sizeof(ws));
 
 	/* We need to take out the map fd for the digest calculation
@@ -332,7 +332,7 @@ int bpf_prog_calc_tag(struct bpf_prog *fp)
 	*bits = cpu_to_be64((psize - 1) << 3);
 
 	while (blocks--) {
-		sha1_transform(digest, todo, ws);
+		sha_transform(digest, todo, ws);
 		todo += SHA1_BLOCK_SIZE;
 	}
 
