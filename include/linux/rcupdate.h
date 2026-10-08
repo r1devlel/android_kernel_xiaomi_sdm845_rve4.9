@@ -778,6 +778,19 @@ static inline void rcu_preempt_sleep_check(void)
 #define rcu_dereference_protected(p, c) \
 	__rcu_dereference_protected((p), (c), __rcu)
 
+/**
+ * rcu_replace_pointer() - replace an RCU pointer, returning its old value
+ * @rcu_ptr: RCU pointer, whose old value is returned
+ * @ptr: regular pointer
+ * @c: the lockdep conditions under which the dereference will take place
+ */
+#define rcu_replace_pointer(rcu_ptr, ptr, c) \
+({ \
+	typeof(ptr) __tmp = rcu_dereference_protected((rcu_ptr), (c)); \
+	rcu_assign_pointer((rcu_ptr), (ptr)); \
+	__tmp; \
+})
+
 
 /**
  * rcu_dereference() - fetch RCU-protected pointer for dereferencing
