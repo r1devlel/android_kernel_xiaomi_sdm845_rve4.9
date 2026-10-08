@@ -8030,6 +8030,7 @@ static void bpf_overflow_handler(struct perf_event *event,
 				 struct pt_regs *regs)
 {
 	struct bpf_perf_event_data_kern ctx = {
+		.event = event,
 		.data = data,
 		.regs = regs,
 	};
