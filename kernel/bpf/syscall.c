@@ -25,6 +25,7 @@
 #include <uapi/linux/btf.h>
 #include <linux/bpf_lsm.h>
 #include <linux/poll.h>
+#include <linux/eventpoll.h>
 #include <linux/bpf-netns.h>
 
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
@@ -36,6 +37,16 @@
 			IS_FD_HASH(map))
 
 #define BPF_OBJ_FLAG_MASK   (BPF_F_RDONLY | BPF_F_WRONLY)
+
+/* 4.9 does not expose the newer perf/BPF notification API. */
+#ifndef PERF_BPF_EVENT_PROG_LOAD
+#define PERF_BPF_EVENT_PROG_LOAD 0
+#define PERF_BPF_EVENT_PROG_UNLOAD 1
+static inline void perf_event_bpf_event(struct bpf_prog *prog, unsigned int event,
+					int flags)
+{
+}
+#endif
 
 DEFINE_PER_CPU(int, bpf_prog_active);
 static DEFINE_IDR(prog_idr);
@@ -188,8 +199,7 @@ static int bpf_map_update_value(struct bpf_map *map, struct fd f, void *key,
 	} else if (map->map_type == BPF_MAP_TYPE_PERCPU_ARRAY) {
 		err = bpf_percpu_array_update(map, key, value, flags);
 	} else if (map->map_type == BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE) {
-		err = bpf_percpu_cgroup_storage_update(map, key, value,
-						       flags);
+		err = -EOPNOTSUPP;
 	} else if (IS_FD_ARRAY(map)) {
 		rcu_read_lock();
 		err = bpf_fd_array_map_update_elem(map, f.file, key, value,
@@ -234,7 +244,7 @@ static int bpf_map_copy_value(struct bpf_map *map, void *key, void *value,
 	} else if (map->map_type == BPF_MAP_TYPE_PERCPU_ARRAY) {
 		err = bpf_percpu_array_copy(map, key, value);
 	} else if (map->map_type == BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE) {
-		err = bpf_percpu_cgroup_storage_copy(map, key, value);
+		err = -EOPNOTSUPP;
 	} else if (map->map_type == BPF_MAP_TYPE_STACK_TRACE) {
 		err = bpf_stackmap_copy(map, key, value);
 	} else if (IS_FD_ARRAY(map) || IS_FD_PROG_ARRAY(map)) {
@@ -1625,6 +1635,7 @@ static const char * const bpf_audit_str[BPF_AUDIT_MAX] = {
 	[BPF_AUDIT_UNLOAD] = "UNLOAD",
 };
 
+#ifdef CONFIG_AUDITSYSCALL
 static void bpf_audit_prog(const struct bpf_prog *prog, unsigned int op)
 {
 	struct audit_context *ctx = NULL;
@@ -1643,6 +1654,11 @@ static void bpf_audit_prog(const struct bpf_prog *prog, unsigned int op)
 			 prog->aux->id, bpf_audit_str[op]);
 	audit_log_end(ab);
 }
+#else
+static inline void bpf_audit_prog(const struct bpf_prog *prog, unsigned int op)
+{
+}
+#endif
 
 int __bpf_prog_charge(struct user_struct *user, u32 pages)
 {
@@ -1751,7 +1767,7 @@ static void __bpf_prog_put_noref(struct bpf_prog *prog, bool deferred)
 
 	if (deferred) {
 		if (prog->aux->sleepable)
-			call_rcu_tasks_trace(&prog->aux->rcu, __bpf_prog_put_rcu);
+			call_rcu_tasks(&prog->aux->rcu, __bpf_prog_put_rcu);
 		else
 			call_rcu(&prog->aux->rcu, __bpf_prog_put_rcu);
 	} else {
