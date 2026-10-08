@@ -14,12 +14,6 @@
 #ifndef _LINUX_SKBUFF_H
 #define _LINUX_SKBUFF_H
 
-/* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet. */
-static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
-{
-	return 0;
-}
-
 #include <linux/kernel.h>
 #include <linux/kmemcheck.h>
 #include <linux/compiler.h>
@@ -3255,6 +3249,12 @@ static inline void skb_get_timestampns(const struct sk_buff *skb,
 				       struct timespec *stamp)
 {
 	*stamp = ktime_to_timespec(skb->tstamp);
+}
+
+/* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet. */
+static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
+{
+	return 0;
 }
 
 static inline void __net_timestamp(struct sk_buff *skb)
