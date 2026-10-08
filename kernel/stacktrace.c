@@ -53,6 +53,30 @@ int snprint_stack_trace(char *buf, size_t size,
 }
 EXPORT_SYMBOL_GPL(snprint_stack_trace);
 
+/**
+ * stack_trace_save_tsk - Save a task stack trace into a storage array
+ * @task: The task to examine
+ * @store: Pointer to storage array
+ * @size: Size of the storage array
+ * @skipnr: Number of entries to skip at the start of the stack trace
+ *
+ * Return: Number of trace entries stored
+ */
+unsigned int stack_trace_save_tsk(struct task_struct *task,
+				  unsigned long *store, unsigned int size,
+				  unsigned int skipnr)
+{
+	struct stack_trace trace = {
+		.entries = store,
+		.max_entries = size,
+		.skip = skipnr + 1,
+	};
+
+	save_stack_trace_tsk(task, &trace);
+	return trace.nr_entries;
+}
+EXPORT_SYMBOL_GPL(stack_trace_save_tsk);
+
 /*
  * Architectures that do not implement save_stack_trace_tsk or
  * save_stack_trace_regs get this weak alias and a once-per-bootup warning
