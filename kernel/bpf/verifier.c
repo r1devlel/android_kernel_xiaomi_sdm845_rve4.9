@@ -5,6 +5,7 @@
  */
 #include <uapi/linux/btf.h>
 #include <linux/kernel.h>
+#include <linux/overflow.h>
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/bpf.h>
