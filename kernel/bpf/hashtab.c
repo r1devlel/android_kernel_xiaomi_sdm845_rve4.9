@@ -9,7 +9,11 @@
 #include <linux/rculist_nulls.h>
 #include <linux/random.h>
 #include <uapi/linux/btf.h>
-#include <linux/rcupdate_trace.h>
+#include <linux/rcupdate.h>
+
+#ifndef rcu_read_lock_trace_held
+#define rcu_read_lock_trace_held() rcu_read_lock_held()
+#endif
 #include "percpu_freelist.h"
 #include "bpf_lru_list.h"
 #include "map_in_map.h"
