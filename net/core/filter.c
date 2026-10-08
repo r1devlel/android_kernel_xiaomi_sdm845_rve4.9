@@ -1544,6 +1544,29 @@ int sk_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 }
 EXPORT_SYMBOL_GPL(sk_attach_filter);
 
+static int __reuseport_attach_prog(struct bpf_prog *prog, struct sock *sk)
+{
+	struct bpf_prog *old_prog;
+	int err;
+
+	if (bpf_prog_size(prog->len) > sysctl_optmem_max)
+		return -ENOMEM;
+
+	if (sk_unhashed(sk) && sk->sk_reuseport) {
+		err = reuseport_alloc(sk);
+		if (err)
+			return err;
+	} else if (!rcu_access_pointer(sk->sk_reuseport_cb)) {
+		return -EINVAL;
+	}
+
+	old_prog = reuseport_attach_prog(sk, prog);
+	if (old_prog)
+		bpf_prog_destroy(old_prog);
+
+	return 0;
+}
+
 int sk_reuseport_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 {
 	struct bpf_prog *prog = __get_filter(fprog, sk);
@@ -1555,7 +1578,7 @@ int sk_reuseport_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 	if (bpf_prog_size(prog->len) > sysctl_optmem_max)
 		err = -ENOMEM;
 	else
-		err = reuseport_attach_prog(sk, prog);
+		err = __reuseport_attach_prog(prog, sk);
 
 	if (err)
 		__bpf_prog_release(prog);
@@ -1625,7 +1648,7 @@ int sk_reuseport_attach_bpf(u32 ufd, struct sock *sk)
 		}
 	}
 
-	err = reuseport_attach_prog(sk, prog);
+	err = __reuseport_attach_prog(prog, sk);
 err_prog_put:
 	if (err)
 		bpf_prog_put(prog);
@@ -1870,7 +1893,7 @@ static inline int sk_skb_try_make_writable(struct sk_buff *skb,
 {
 	int err = __bpf_try_make_writable(skb, write_len);
 
-	bpf_compute_data_end_sk_skb(skb);
+	bpf_compute_data_end(skb);
 	return err;
 }
 
@@ -1966,7 +1989,7 @@ BPF_CALL_5(bpf_l4_csum_replace, struct sk_buff *, skb, u32, offset,
 		if (unlikely(from != 0))
 			return -EINVAL;
 
-		inet_proto_csum_replace_by_diff(ptr, skb, to, is_pseudo, is_ipv6);
+		inet_proto_csum_replace_by_diff(ptr, skb, to, is_pseudo);
 		break;
 	case 2:
 		inet_proto_csum_replace2(ptr, skb, from, to, is_pseudo);
@@ -2116,7 +2139,7 @@ static inline int __bpf_tx_skb(struct net_device *dev, struct sk_buff *skb)
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp.tv64 = 0;
 
 	dev_xmit_recursion_inc();
 	ret = dev_queue_xmit(skb);
@@ -2194,7 +2217,7 @@ static int bpf_out_neigh_v6(struct net *net, struct sk_buff *skb,
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp.tv64 = 0;
 
 	if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
 		struct sk_buff *skb2;
@@ -2301,7 +2324,7 @@ static int bpf_out_neigh_v4(struct net *net, struct sk_buff *skb,
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp.tv64 = 0;
 
 	if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
 		struct sk_buff *skb2;
@@ -3616,7 +3639,7 @@ BPF_CALL_4(sk_skb_adjust_room, struct sk_buff *, skb, s32, len_diff,
 			return -ENOMEM;
 		__skb_pull(skb, len_diff_abs);
 	}
-	bpf_compute_data_end_sk_skb(skb);
+	bpf_compute_data_end(skb);
 #ifdef CONFIG_TLS
 	if (tls_sw_has_ctx_rx(skb->sk)) {
 		struct strp_msg *rxm = strp_msg(skb);
@@ -3794,7 +3817,7 @@ BPF_CALL_3(sk_skb_change_tail, struct sk_buff *, skb, u32, new_len,
 {
 	int ret = __bpf_skb_change_tail(skb, new_len, flags);
 
-	bpf_compute_data_end_sk_skb(skb);
+	bpf_compute_data_end(skb);
 	return ret;
 }
 
@@ -3861,7 +3884,7 @@ BPF_CALL_3(sk_skb_change_head, struct sk_buff *, skb, u32, head_room,
 {
 	int ret = __bpf_skb_change_head(skb, head_room, flags);
 
-	bpf_compute_data_end_sk_skb(skb);
+	bpf_compute_data_end(skb);
 	return ret;
 }
 
