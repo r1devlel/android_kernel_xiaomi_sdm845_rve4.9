@@ -17,7 +17,6 @@
 #include <net/sock.h>
 #include <net/bpf_sk_storage.h>
 
-#include "../cgroup/cgroup-internal.h"
 
 DEFINE_STATIC_KEY_ARRAY_FALSE(cgroup_bpf_enabled_key, MAX_BPF_ATTACH_TYPE);
 EXPORT_SYMBOL(cgroup_bpf_enabled_key);
