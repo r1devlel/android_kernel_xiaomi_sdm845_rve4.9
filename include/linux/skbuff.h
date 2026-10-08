@@ -11,6 +11,7 @@
  *	2 of the License, or (at your option) any later version.
  */
 
+#ifndef _LINUX_SKBUFF_H
 #define _LINUX_SKBUFF_H
 
 /* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet. */
