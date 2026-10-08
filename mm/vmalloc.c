@@ -1951,6 +1951,29 @@ void *vmalloc_node(unsigned long size, int node)
 }
 EXPORT_SYMBOL(vmalloc_node);
 
+/* Compatibility helpers for modern BPF code on 4.9 vmalloc API. */
+void *vmalloc_user_node_flags(unsigned long size, int node, gfp_t flags)
+{
+	struct vm_struct *area;
+	void *ret;
+
+	ret = __vmalloc_node(size, SHMLBA, flags | __GFP_ZERO,
+			     PAGE_KERNEL, node, __builtin_return_address(0));
+	if (ret) {
+		area = find_vm_area(ret);
+		area->flags |= VM_USERMAP;
+	}
+	return ret;
+}
+EXPORT_SYMBOL(vmalloc_user_node_flags);
+
+void *__vmalloc_node_flags_caller(unsigned long size, int node,
+				  gfp_t flags, const void *caller)
+{
+	return __vmalloc_node(size, 1, flags, PAGE_KERNEL, node, caller);
+}
+EXPORT_SYMBOL(__vmalloc_node_flags_caller);
+
 /**
  * vzalloc_node - allocate memory on a specific node with zero fill
  * @size:	allocation size
