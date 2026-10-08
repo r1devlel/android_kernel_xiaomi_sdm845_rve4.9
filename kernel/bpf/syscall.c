@@ -3952,22 +3952,13 @@ static int bpf_task_fd_query(const union bpf_attr *attr,
 		goto out_not_supp;
 	}
 
-	event = perf_get_event(file);
-	if (!IS_ERR(event)) {
-		u64 probe_offset, probe_addr;
-		u32 prog_id, fd_type;
-		const char *buf;
-
-		err = bpf_get_perf_event_info(event, &prog_id, &fd_type,
-					      &buf, &probe_offset,
-					      &probe_addr);
-		if (!err)
-			err = bpf_task_fd_query_copy(attr, uattr, prog_id,
-						     fd_type, buf,
-						     probe_offset,
-						     probe_addr);
-		goto put_file;
-	}
+	/*
+	 * Perf-event task-fd query support depends on newer perf/BPF trace
+	 * infrastructure which is not present in the 4.9 base yet. Keep the
+	 * BPF task-fd query path functional for BPF links and explicitly
+	 * report unsupported for legacy perf-event fds.
+	 */
+	goto out_not_supp;
 
 out_not_supp:
 	err = -ENOTSUPP;
@@ -4096,7 +4087,13 @@ static int link_create(union bpf_attr *attr)
 		break;
 #ifdef CONFIG_NET
 	case BPF_PROG_TYPE_XDP:
-		ret = bpf_xdp_link_attach(attr, prog);
+		/*
+		 * XDP link attach needs the newer net/core XDP-link
+		 * implementation. The classic BPF/XDP attach path remains
+		 * available; defer BPF_LINK_CREATE XDP until that dependency
+		 * chain is ported.
+		 */
+		ret = -EOPNOTSUPP;
 		break;
 #endif
 	default:
