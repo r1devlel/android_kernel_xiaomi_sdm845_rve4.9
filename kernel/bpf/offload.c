@@ -102,3 +102,20 @@ struct bpf_map *bpf_map_offload_map_alloc(union bpf_attr *attr)
 void bpf_map_offload_map_free(struct bpf_map *map)
 {
 }
+
+/*
+ * The 4.9 tree has no netdev BPF offload backend. These entry points are
+ * required by the newer verifier/syscall code, but must fail closed.
+ */
+int bpf_prog_offload_verifier_prep(struct bpf_prog *prog)
+{
+	return -EOPNOTSUPP;
+}
+
+void bpf_prog_offload_replace_insn(struct bpf_verifier_env *env, u32 off,
+				   struct bpf_insn *insn)
+{
+}
+
+const struct bpf_prog_ops bpf_offload_prog_ops = {
+};
