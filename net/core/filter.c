@@ -53,6 +53,7 @@
 #include <net/dst.h>
 #include <net/sock_reuseport.h>
 #include <net/xdp.h>
+#include <linux/sockptr.h>
 
 /**
  *	sk_filter_trim_cap - run a packet through a socket filter
@@ -2571,7 +2572,7 @@ static const struct bpf_func_proto bpf_get_socket_uid_proto = {
 };
 
 static const struct bpf_func_proto *
-sk_filter_func_proto(enum bpf_func_id func_id)
+sk_filter_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
 	switch (func_id) {
 	case BPF_FUNC_map_lookup_elem:
@@ -2601,7 +2602,7 @@ sk_filter_func_proto(enum bpf_func_id func_id)
 }
 
 static const struct bpf_func_proto *
-tc_cls_act_func_proto(enum bpf_func_id func_id)
+tc_cls_act_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
 	switch (func_id) {
 	case BPF_FUNC_skb_store_bytes:
@@ -2655,12 +2656,12 @@ tc_cls_act_func_proto(enum bpf_func_id func_id)
 	case BPF_FUNC_skb_under_cgroup:
 		return &bpf_skb_under_cgroup_proto;
 	default:
-		return sk_filter_func_proto(func_id);
+		return sk_filter_func_proto(func_id, prog);
 	}
 }
 
 static const struct bpf_func_proto *
-xdp_func_proto(enum bpf_func_id func_id)
+xdp_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
 	switch (func_id) {
 	case BPF_FUNC_perf_event_output:
@@ -2668,18 +2669,18 @@ xdp_func_proto(enum bpf_func_id func_id)
 	case BPF_FUNC_get_smp_processor_id:
 		return &bpf_get_smp_processor_id_proto;
 	default:
-		return sk_filter_func_proto(func_id);
+		return sk_filter_func_proto(func_id, prog);
 	}
 }
 
 static const struct bpf_func_proto *
-cg_skb_func_proto(enum bpf_func_id func_id)
+cg_skb_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
 	switch (func_id) {
 	case BPF_FUNC_skb_load_bytes:
 		return &bpf_skb_load_bytes_proto;
 	default:
-		return sk_filter_func_proto(func_id);
+		return sk_filter_func_proto(func_id, prog);
 	}
 }
 
@@ -2698,8 +2699,10 @@ static bool __is_valid_access(int off, int size, enum bpf_access_type type)
 
 static bool sk_filter_is_valid_access(int off, int size,
 				      enum bpf_access_type type,
-				      enum bpf_reg_type *reg_type)
+				      const struct bpf_prog *prog,
+				      struct bpf_insn_access_aux *info)
 {
+	enum bpf_reg_type *reg_type = &info->reg_type;
 	switch (off) {
 	case offsetof(struct __sk_buff, tc_classid):
 	case offsetof(struct __sk_buff, data):
@@ -2761,8 +2764,10 @@ static int tc_cls_act_prologue(struct bpf_insn *insn_buf, bool direct_write,
 
 static bool tc_cls_act_is_valid_access(int off, int size,
 				       enum bpf_access_type type,
-				       enum bpf_reg_type *reg_type)
+				       const struct bpf_prog *prog,
+				       struct bpf_insn_access_aux *info)
 {
+	enum bpf_reg_type *reg_type = &info->reg_type;
 	if (type == BPF_WRITE) {
 		switch (off) {
 		case offsetof(struct __sk_buff, mark):
@@ -2804,8 +2809,10 @@ static bool __is_valid_xdp_access(int off, int size,
 
 static bool xdp_is_valid_access(int off, int size,
 				enum bpf_access_type type,
-				enum bpf_reg_type *reg_type)
+				const struct bpf_prog *prog,
+				struct bpf_insn_access_aux *info)
 {
+	enum bpf_reg_type *reg_type = &info->reg_type;
 	if (type == BPF_WRITE)
 		return false;
 
@@ -2827,12 +2834,13 @@ void bpf_warn_invalid_xdp_action(u32 act)
 }
 EXPORT_SYMBOL_GPL(bpf_warn_invalid_xdp_action);
 
-static u32 sk_filter_convert_ctx_access(enum bpf_access_type type, int dst_reg,
-					int src_reg, int ctx_off,
-					struct bpf_insn *insn_buf,
-					struct bpf_prog *prog)
+static u32 sk_filter_convert_ctx_access(enum bpf_access_type type,
+					const struct bpf_insn *src,
+					struct bpf_insn *dst,
+					struct bpf_prog *prog, u32 *target_size)
 {
-	struct bpf_insn *insn = insn_buf;
+	int dst_reg = src->dst_reg, src_reg = src->src_reg, ctx_off = src->off;
+	struct bpf_insn *insn = dst;
 
 	switch (ctx_off) {
 	case offsetof(struct __sk_buff, len):
@@ -2978,12 +2986,13 @@ static u32 sk_filter_convert_ctx_access(enum bpf_access_type type, int dst_reg,
 	return insn - insn_buf;
 }
 
-static u32 tc_cls_act_convert_ctx_access(enum bpf_access_type type, int dst_reg,
-					 int src_reg, int ctx_off,
-					 struct bpf_insn *insn_buf,
-					 struct bpf_prog *prog)
+static u32 tc_cls_act_convert_ctx_access(enum bpf_access_type type,
+					 const struct bpf_insn *src,
+					 struct bpf_insn *dst,
+					 struct bpf_prog *prog, u32 *target_size)
 {
-	struct bpf_insn *insn = insn_buf;
+	int dst_reg = src->dst_reg, src_reg = src->src_reg, ctx_off = src->off;
+	struct bpf_insn *insn = dst;
 
 	switch (ctx_off) {
 	case offsetof(struct __sk_buff, ifindex):
@@ -2996,19 +3005,19 @@ static u32 tc_cls_act_convert_ctx_access(enum bpf_access_type type, int dst_reg,
 				      offsetof(struct net_device, ifindex));
 		break;
 	default:
-		return sk_filter_convert_ctx_access(type, dst_reg, src_reg,
-						    ctx_off, insn_buf, prog);
+		return sk_filter_convert_ctx_access(type, src, dst, prog, target_size);
 	}
 
 	return insn - insn_buf;
 }
 
-static u32 xdp_convert_ctx_access(enum bpf_access_type type, int dst_reg,
-				  int src_reg, int ctx_off,
-				  struct bpf_insn *insn_buf,
-				  struct bpf_prog *prog)
+static u32 xdp_convert_ctx_access(enum bpf_access_type type,
+				  const struct bpf_insn *src,
+				  struct bpf_insn *dst,
+				  struct bpf_prog *prog, u32 *target_size)
 {
-	struct bpf_insn *insn = insn_buf;
+	int dst_reg = src->dst_reg, src_reg = src->src_reg, ctx_off = src->off;
+	struct bpf_insn *insn = dst;
 
 	switch (ctx_off) {
 	case offsetof(struct xdp_md, data):
@@ -3026,67 +3035,30 @@ static u32 xdp_convert_ctx_access(enum bpf_access_type type, int dst_reg,
 	return insn - insn_buf;
 }
 
-static const struct bpf_verifier_ops sk_filter_ops = {
-	.get_func_proto		= sk_filter_func_proto,
-	.is_valid_access	= sk_filter_is_valid_access,
-	.convert_ctx_access	= sk_filter_convert_ctx_access,
+const struct bpf_verifier_ops sk_filter_verifier_ops = {
+	.get_func_proto         = sk_filter_func_proto,
+	.is_valid_access        = sk_filter_is_valid_access,
+	.convert_ctx_access     = sk_filter_convert_ctx_access,
 };
 
-static const struct bpf_verifier_ops tc_cls_act_ops = {
-	.get_func_proto		= tc_cls_act_func_proto,
-	.is_valid_access	= tc_cls_act_is_valid_access,
-	.convert_ctx_access	= tc_cls_act_convert_ctx_access,
-	.gen_prologue		= tc_cls_act_prologue,
+const struct bpf_verifier_ops tc_cls_act_verifier_ops = {
+	.get_func_proto         = tc_cls_act_func_proto,
+	.is_valid_access        = tc_cls_act_is_valid_access,
+	.convert_ctx_access     = tc_cls_act_convert_ctx_access,
+	.gen_prologue           = tc_cls_act_prologue,
 };
 
-static const struct bpf_verifier_ops xdp_ops = {
-	.get_func_proto		= xdp_func_proto,
-	.is_valid_access	= xdp_is_valid_access,
-	.convert_ctx_access	= xdp_convert_ctx_access,
+const struct bpf_verifier_ops xdp_verifier_ops = {
+	.get_func_proto         = xdp_func_proto,
+	.is_valid_access        = xdp_is_valid_access,
+	.convert_ctx_access     = xdp_convert_ctx_access,
 };
 
-static const struct bpf_verifier_ops cg_skb_ops = {
-	.get_func_proto		= cg_skb_func_proto,
-	.is_valid_access	= sk_filter_is_valid_access,
-	.convert_ctx_access	= sk_filter_convert_ctx_access,
+const struct bpf_verifier_ops cg_skb_verifier_ops = {
+	.get_func_proto         = cg_skb_func_proto,
+	.is_valid_access        = sk_filter_is_valid_access,
+	.convert_ctx_access     = sk_filter_convert_ctx_access,
 };
-
-static struct bpf_prog_type_list sk_filter_type __read_mostly = {
-	.ops	= &sk_filter_ops,
-	.type	= BPF_PROG_TYPE_SOCKET_FILTER,
-};
-
-static struct bpf_prog_type_list sched_cls_type __read_mostly = {
-	.ops	= &tc_cls_act_ops,
-	.type	= BPF_PROG_TYPE_SCHED_CLS,
-};
-
-static struct bpf_prog_type_list sched_act_type __read_mostly = {
-	.ops	= &tc_cls_act_ops,
-	.type	= BPF_PROG_TYPE_SCHED_ACT,
-};
-
-static struct bpf_prog_type_list xdp_type __read_mostly = {
-	.ops	= &xdp_ops,
-	.type	= BPF_PROG_TYPE_XDP,
-};
-
-static struct bpf_prog_type_list cg_skb_type __read_mostly = {
-	.ops	= &cg_skb_ops,
-	.type	= BPF_PROG_TYPE_CGROUP_SKB,
-};
-
-static int __init register_sk_filter_ops(void)
-{
-	bpf_register_prog_type(&sk_filter_type);
-	bpf_register_prog_type(&sched_cls_type);
-	bpf_register_prog_type(&sched_act_type);
-	bpf_register_prog_type(&xdp_type);
-	bpf_register_prog_type(&cg_skb_type);
-
-	return 0;
-}
-late_initcall(register_sk_filter_ops);
 
 int sk_detach_filter(struct sock *sk)
 {
@@ -3108,8 +3080,7 @@ int sk_detach_filter(struct sock *sk)
 }
 EXPORT_SYMBOL_GPL(sk_detach_filter);
 
-int sk_get_filter(struct sock *sk, struct sock_filter __user *ubuf,
-		  unsigned int len)
+int sk_get_filter(struct sock *sk, sockptr_t ubuf, unsigned int len)
 {
 	struct sock_fprog_kern *fprog;
 	struct sk_filter *filter;
@@ -3140,7 +3111,7 @@ int sk_get_filter(struct sock *sk, struct sock_filter __user *ubuf,
 		goto out;
 
 	ret = -EFAULT;
-	if (copy_to_user(ubuf, fprog->filter, bpf_classic_proglen(fprog)))
+	if (copy_to_sockptr(ubuf, fprog->filter, bpf_classic_proglen(fprog)))
 		goto out;
 
 	/* Instead of bytes, the API requests to return the number
