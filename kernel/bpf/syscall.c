@@ -1772,10 +1772,8 @@ static void __bpf_prog_put_noref(struct bpf_prog *prog, bool deferred)
 	bpf_prog_free_linfo(prog);
 
 	if (deferred) {
-		if (prog->aux->sleepable)
-			call_rcu_tasks(&prog->aux->rcu, __bpf_prog_put_rcu);
-		else
-			call_rcu(&prog->aux->rcu, __bpf_prog_put_rcu);
+		/* Sleepable BPF programs are rejected on this 4.9 base. */
+		call_rcu(&prog->aux->rcu, __bpf_prog_put_rcu);
 	} else {
 		__bpf_prog_put_rcu(&prog->aux->rcu);
 	}
@@ -2132,10 +2130,12 @@ static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
 	if (CHECK_ATTR(BPF_PROG_LOAD))
 		return -EINVAL;
 
+	if (attr->prog_flags & BPF_F_SLEEPABLE)
+		return -EOPNOTSUPP;
+
 	if (attr->prog_flags & ~(BPF_F_STRICT_ALIGNMENT |
 				 BPF_F_ANY_ALIGNMENT |
 				 BPF_F_TEST_STATE_FREQ |
-				 BPF_F_SLEEPABLE |
 				 BPF_F_TEST_RND_HI32))
 		return -EINVAL;
 
