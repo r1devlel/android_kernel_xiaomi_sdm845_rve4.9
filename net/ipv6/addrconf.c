@@ -3103,7 +3103,7 @@ static int ipv6_generate_stable_address(struct in6_addr *address,
 {
 	static DEFINE_SPINLOCK(lock);
 	static __u32 digest[SHA_DIGEST_WORDS];
-	static __u32 workspace[SHA_WORKSPACE_WORDS];
+	static __u32 workspace[SHA1_WORKSPACE_WORDS];
 
 	static union {
 		char __data[SHA_MESSAGE_BYTES];
