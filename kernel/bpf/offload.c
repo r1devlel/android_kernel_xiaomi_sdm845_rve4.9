@@ -11,8 +11,6 @@
 #include <linux/err.h>
 #include <linux/netdevice.h>
 
-const struct bpf_map_ops bpf_map_offload_ops = { };
-
 int bpf_prog_offload_compile(struct bpf_prog *prog)
 {
 	return -EOPNOTSUPP;
