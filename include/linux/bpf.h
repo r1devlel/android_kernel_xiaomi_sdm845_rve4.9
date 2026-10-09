@@ -23,6 +23,9 @@
 #include <linux/percpu-refcount.h>
 #include <linux/preempt.h>
 
+struct pt_regs;
+typedef struct pt_regs bpf_user_pt_regs_t;
+
 struct bpf_verifier_env;
 struct bpf_verifier_log;
 struct perf_event;
