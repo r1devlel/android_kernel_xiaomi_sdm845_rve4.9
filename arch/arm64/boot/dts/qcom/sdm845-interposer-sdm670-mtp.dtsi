@@ -13,6 +13,12 @@
 #include "sdm845-mtp.dtsi"
 #include "sdm845-interposer-pm660.dtsi"
 
+/* This SDM670 interposer uses PM660, not the PM8998 supplies from sdm845.dtsi. */
+&clock_cpucc {
+	vdd_l3_mx_ao-supply = <&pm660l_s1_level_ao>;
+	vdd_pwrcl_mx_ao-supply = <&pm660l_s1_level_ao>;
+};
+
 &qupv3_se10_i2c {
 	/delete-node/ qcom,smb1355@8;
 	/delete-node/ qcom,smb1355@c;
