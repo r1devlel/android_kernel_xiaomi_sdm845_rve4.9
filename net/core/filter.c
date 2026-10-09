@@ -3122,3 +3122,18 @@ out:
 	release_sock(sk);
 	return ret;
 }
+
+/*
+ * Socket BTF type IDs used by BPF socket-local-storage helpers.
+ * With DEBUG_INFO_BTF disabled these remain zero, so BTF-dependent helpers
+ * cannot resolve socket types, while ordinary BPF map support still builds.
+ */
+#include <linux/btf_ids.h>
+#ifdef CONFIG_DEBUG_INFO_BTF
+BTF_ID_LIST_GLOBAL(btf_sock_ids)
+#define BTF_SOCK_TYPE(name, type) BTF_ID(struct, type)
+BTF_SOCK_TYPE_xxx
+#undef BTF_SOCK_TYPE
+#else
+u32 btf_sock_ids[MAX_BTF_SOCK_TYPE];
+#endif
