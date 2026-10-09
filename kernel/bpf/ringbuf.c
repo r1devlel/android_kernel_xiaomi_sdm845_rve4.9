@@ -8,7 +8,7 @@
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
 #include <linux/poll.h>
-#include <linux/eventpoll.h>
+#include <uapi/linux/eventpoll.h>
 #include <linux/kmemleak.h>
 #include <uapi/linux/btf.h>
 
