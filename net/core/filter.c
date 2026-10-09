@@ -2983,7 +2983,7 @@ static u32 sk_filter_convert_ctx_access(enum bpf_access_type type,
 #endif
 	}
 
-	return insn - insn_buf;
+	return insn - dst;
 }
 
 static u32 tc_cls_act_convert_ctx_access(enum bpf_access_type type,
@@ -3008,7 +3008,7 @@ static u32 tc_cls_act_convert_ctx_access(enum bpf_access_type type,
 		return sk_filter_convert_ctx_access(type, src, dst, prog, target_size);
 	}
 
-	return insn - insn_buf;
+	return insn - dst;
 }
 
 static u32 xdp_convert_ctx_access(enum bpf_access_type type,
@@ -3032,7 +3032,7 @@ static u32 xdp_convert_ctx_access(enum bpf_access_type type,
 		break;
 	}
 
-	return insn - insn_buf;
+	return insn - dst;
 }
 
 const struct bpf_verifier_ops sk_filter_verifier_ops = {
