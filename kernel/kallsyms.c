@@ -24,6 +24,8 @@
 #include <linux/ctype.h>
 #include <linux/slab.h>
 #include <linux/compiler.h>
+#include <linux/security.h>
+#include <linux/user_namespace.h>
 
 #include <asm/sections.h>
 
@@ -662,6 +664,40 @@ static const struct file_operations kallsyms_operations = {
 	.llseek = seq_lseek,
 	.release = seq_release_private,
 };
+
+/*
+ * Keep kallsyms address disclosure consistent with kptr_restrict.
+ * This helper is used by BPF object-info queries as well as /proc/kallsyms.
+ */
+extern int kptr_restrict;
+
+static inline int kallsyms_for_perf(void)
+{
+#ifdef CONFIG_PERF_EVENTS
+	extern int sysctl_perf_event_paranoid;
+
+	if (sysctl_perf_event_paranoid <= 1)
+		return 1;
+#endif
+	return 0;
+}
+
+bool kallsyms_show_value(const struct cred *cred)
+{
+	switch (kptr_restrict) {
+	case 0:
+		if (kallsyms_for_perf())
+			return true;
+		/* fall through */
+	case 1:
+		if (security_capable_noaudit(cred, &init_user_ns,
+					     CAP_SYSLOG) == 0)
+			return true;
+		/* fall through */
+	default:
+		return false;
+	}
+}
 
 static int __init kallsyms_init(void)
 {
