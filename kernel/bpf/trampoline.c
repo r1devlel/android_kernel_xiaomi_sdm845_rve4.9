@@ -7,7 +7,6 @@
 #include <linux/rbtree_latch.h>
 #include <linux/perf_event.h>
 #include <linux/btf.h>
-#include <linux/rcupdate_trace.h>
 #include <linux/rcupdate.h>
 
 /* dummy _ops. The verifier will operate on target program's ops. */
