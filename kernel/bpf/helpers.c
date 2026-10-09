@@ -167,3 +167,32 @@ const struct bpf_func_proto bpf_get_current_comm_proto = {
 	.arg1_type	= ARG_PTR_TO_UNINIT_MEM,
 	.arg2_type	= ARG_CONST_SIZE,
 };
+
+/*
+ * Backport the value-copy helper used by maps containing bpf_spin_lock.
+ * The lock word is the BPF ABI's 32-bit val field; preemption is disabled
+ * while held, matching the verifier's non-sleeping lock contract.
+ */
+void copy_map_value_locked(struct bpf_map *map, void *dst, void *src,
+			   bool lock_src)
+{
+	struct bpf_spin_lock *lock;
+	u32 old;
+
+	if (WARN_ON_ONCE(!map_value_has_spin_lock(map))) {
+		copy_map_value(map, dst, src);
+		return;
+	}
+
+	lock = (struct bpf_spin_lock *)((char *)(lock_src ? src : dst) +
+					map->spin_lock_off);
+	preempt_disable();
+	do {
+		old = cmpxchg(&lock->val, 0, 1);
+		if (old)
+			cpu_relax();
+	} while (old);
+	copy_map_value(map, dst, src);
+	WRITE_ONCE(lock->val, 0);
+	preempt_enable();
+}
