@@ -192,8 +192,8 @@ static int sock_map_init_proto(struct sock *sk, struct sk_psock *psock)
 		break;
 
 	case SOCK_DGRAM:
-		prot = udp_bpf_get_proto(sk, psock);
-		break;
+		/* UDP sockmap callbacks are not implemented in this 4.9 tree. */
+		return -EOPNOTSUPP;
 
 	default:
 		return -EINVAL;
@@ -381,7 +381,7 @@ static void *sock_map_lookup(struct bpf_map *map, void *key)
 	sk = __sock_map_lookup_elem(map, *(u32 *)key);
 	if (!sk || !sk_fullsock(sk))
 		return NULL;
-	if (sk_is_refcounted(sk) && !atomic_inc_not_zero(&sk->sk_refcnt))
+	if (!atomic_inc_not_zero(&sk->sk_refcnt))
 		return NULL;
 	return sk;
 }
