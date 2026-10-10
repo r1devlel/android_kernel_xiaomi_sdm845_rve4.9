@@ -11310,8 +11310,8 @@ static int convert_ctx_accesses(struct bpf_verifier_env *env)
 			convert_ctx_access = bpf_tcp_sock_convert_ctx_access;
 			break;
 		case PTR_TO_XDP_SOCK:
-			convert_ctx_access = bpf_xdp_sock_convert_ctx_access;
-			break;
+			verbose(env, "XDP socket context is unavailable on this 4.9 networking base\n");
+			return -EOPNOTSUPP;
 		case PTR_TO_BTF_ID:
 			if (type == BPF_READ) {
 				insn->code = BPF_LDX | BPF_PROBE_MEM |
