@@ -2759,11 +2759,13 @@ struct bpf_raw_tp_link {
 
 static void bpf_raw_tp_link_release(struct bpf_link *link)
 {
+#ifdef CONFIG_BPF_EVENTS
 	struct bpf_raw_tp_link *raw_tp =
 		container_of(link, struct bpf_raw_tp_link, link);
 
 	bpf_probe_unregister(raw_tp->btp, raw_tp->link.prog);
 	bpf_put_raw_tracepoint(raw_tp->btp);
+#endif
 }
 
 static void bpf_raw_tp_link_dealloc(struct bpf_link *link)
@@ -2830,6 +2832,9 @@ static const struct bpf_link_ops bpf_raw_tp_link_lops = {
 
 static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
 {
+#ifndef CONFIG_BPF_EVENTS
+	return -EOPNOTSUPP;
+#else
 	struct bpf_link_primer link_primer;
 	struct bpf_raw_tp_link *link;
 	struct bpf_raw_event_map *btp;
@@ -2915,6 +2920,7 @@ out_put_btp:
 out_put_prog:
 	bpf_prog_put(prog);
 	return err;
+#endif
 }
 
 static int bpf_prog_attach_check_attach_type(const struct bpf_prog *prog,
