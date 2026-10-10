@@ -112,6 +112,14 @@ int bpf_prog_offload_verifier_prep(struct bpf_prog *prog)
 	return -EOPNOTSUPP;
 }
 
+/* No offload backend is available in this 4.9 tree. Ordinary programs
+ * have nothing to finalize; fail closed if an offload object ever exists.
+ */
+int bpf_prog_offload_finalize(struct bpf_verifier_env *env)
+{
+	return env->prog->aux->offload ? -EOPNOTSUPP : 0;
+}
+
 void bpf_prog_offload_replace_insn(struct bpf_verifier_env *env, u32 off,
 				   struct bpf_insn *insn)
 {
