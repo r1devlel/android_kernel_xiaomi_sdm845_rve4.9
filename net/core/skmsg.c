@@ -7,7 +7,6 @@
 
 #include <net/sock.h>
 #include <net/tcp.h>
-#include <net/tls.h>
 
 static bool sk_msg_try_coalesce_ok(struct sk_msg *msg, int elem_first_coalesce)
 {
@@ -839,13 +838,10 @@ static void sk_psock_strp_data_ready(struct sock *sk)
 	rcu_read_lock();
 	psock = sk_psock(sk);
 	if (likely(psock)) {
-		if (tls_sw_has_ctx_rx(sk)) {
-			psock->parser.saved_data_ready(sk);
-		} else {
-			write_lock_bh(&sk->sk_callback_lock);
-			strp_data_ready(&psock->parser.strp);
-			write_unlock_bh(&sk->sk_callback_lock);
-		}
+		/* This 4.9 tree has no TLS socket API; use the stream parser. */
+		write_lock_bh(&sk->sk_callback_lock);
+		strp_data_ready(&psock->parser.strp);
+		write_unlock_bh(&sk->sk_callback_lock);
 	}
 	rcu_read_unlock();
 }
