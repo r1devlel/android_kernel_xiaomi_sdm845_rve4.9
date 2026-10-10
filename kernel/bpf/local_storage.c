@@ -14,7 +14,7 @@
 DEFINE_PER_CPU(struct bpf_cgroup_storage_info,
 	       bpf_cgroup_storage_info[BPF_CGROUP_STORAGE_NEST_MAX]);
 
-#include "../cgroup/cgroup-internal.h"
+/* cgroup_mutex and the public storage interfaces are in linux/cgroup.h. */
 
 #define LOCAL_STORAGE_CREATE_FLAG_MASK					\
 	(BPF_F_NUMA_NODE | BPF_F_ACCESS_MASK)
