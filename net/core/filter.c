@@ -3200,7 +3200,7 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 			BPF_FIELD_SIZEOF(struct sock, sk_type),
 			si->dst_reg, si->src_reg,
 			bpf_target_off(struct sock, sk_type,
-				       sizeof_field(struct sock, sk_type),
+				       FIELD_SIZEOF(struct sock, sk_type),
 				       target_size));
 		break;
 
@@ -3209,7 +3209,7 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 			BPF_FIELD_SIZEOF(struct sock, sk_protocol),
 			si->dst_reg, si->src_reg,
 			bpf_target_off(struct sock, sk_protocol,
-				       sizeof_field(struct sock, sk_protocol),
+				       FIELD_SIZEOF(struct sock, sk_protocol),
 				       target_size));
 		break;
 
@@ -3301,7 +3301,7 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 			BPF_FIELD_SIZEOF(struct sock, sk_rx_queue_mapping),
 			si->dst_reg, si->src_reg,
 			bpf_target_off(struct sock, sk_rx_queue_mapping,
-				       sizeof_field(struct sock,
+				       FIELD_SIZEOF(struct sock,
 						    sk_rx_queue_mapping),
 				       target_size));
 		*insn++ = BPF_JMP_IMM(BPF_JNE, si->dst_reg, NO_QUEUE_MAPPING,
