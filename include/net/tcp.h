@@ -804,6 +804,10 @@ struct tcp_skb_cb {
 			/* when we reached the "delivered" count */
 			struct skb_mstamp delivered_mstamp;
 		} tx;   /* only used for outgoing skbs */
+		struct {
+			u64 flags;
+			struct sock *sk_redir;
+		} bpf;
 		union {
 			struct inet_skb_parm	h4;
 #if IS_ENABLED(CONFIG_IPV6)
@@ -814,6 +818,11 @@ struct tcp_skb_cb {
 };
 
 #define TCP_SKB_CB(__skb)	((struct tcp_skb_cb *)&((__skb)->cb[0]))
+
+#ifdef CONFIG_BPF_SYSCALL
+struct sk_psock;
+struct proto *tcp_bpf_get_proto(struct sock *sk, struct sk_psock *psock);
+#endif
 
 
 #if IS_ENABLED(CONFIG_IPV6)
