@@ -605,7 +605,9 @@ static struct bpf_map *bpf_struct_ops_map_alloc(union bpf_attr *attr)
 	}
 
 	mutex_init(&st_map->lock);
-	set_vm_flush_reset_perms(st_map->image);
+	/* Linux 4.9 uses module_alloc() for executable BPF memory and has no
+	 * VM_FLUSH_RESET_PERMS flag; bpf_jit_free_exec() releases this area.
+	 */
 	bpf_map_init_from_attr(map, attr);
 	bpf_map_charge_move(&map->memory, &mem);
 
