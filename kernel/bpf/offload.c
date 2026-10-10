@@ -8,6 +8,7 @@
  * device offload explicitly unsupported while allowing core BPF to build.
  */
 #include <linux/bpf.h>
+#include <linux/bpf_verifier.h>
 #include <linux/err.h>
 #include <linux/netdevice.h>
 
