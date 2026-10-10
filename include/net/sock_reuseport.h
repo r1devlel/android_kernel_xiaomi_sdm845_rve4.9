@@ -6,6 +6,8 @@
 #include <linux/types.h>
 #include <net/sock.h>
 
+extern spinlock_t reuseport_lock;
+
 struct sock_reuseport {
 	struct rcu_head		rcu;
 
