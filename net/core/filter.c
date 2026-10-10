@@ -3197,21 +3197,35 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 		break;
 
 	case offsetof(struct bpf_sock, type):
-		*insn++ = BPF_LDX_MEM(
-			BPF_FIELD_SIZEOF(struct sock, sk_type),
-			si->dst_reg, si->src_reg,
-			bpf_target_off(struct sock, sk_type,
-				       FIELD_SIZEOF(struct sock, sk_type),
-				       target_size));
+		/*
+		 * In this 4.9 tree sk_type and sk_protocol are bitfields
+		 * sharing one 32-bit word. Read that word and extract the
+		 * requested value instead of applying offsetof/sizeof to
+		 * a bitfield.
+		 */
+		*target_size = sizeof(u32);
+		*insn++ = BPF_LDX_MEM(BPF_W, si->dst_reg, si->src_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(u32));
+#ifdef __BIG_ENDIAN_BITFIELD
+		/* sk_type occupies the low 16 bits on big-endian. */
+#else
+		*insn++ = BPF_ALU64_IMM(BPF_RSH, si->dst_reg, 16);
+#endif
+		*insn++ = BPF_ALU64_IMM(BPF_AND, si->dst_reg, 0xffff);
 		break;
 
 	case offsetof(struct bpf_sock, protocol):
-		*insn++ = BPF_LDX_MEM(
-			BPF_FIELD_SIZEOF(struct sock, sk_protocol),
-			si->dst_reg, si->src_reg,
-			bpf_target_off(struct sock, sk_protocol,
-				       FIELD_SIZEOF(struct sock, sk_protocol),
-				       target_size));
+		*target_size = sizeof(u32);
+		*insn++ = BPF_LDX_MEM(BPF_W, si->dst_reg, si->src_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(u32));
+#ifdef __BIG_ENDIAN_BITFIELD
+		*insn++ = BPF_ALU64_IMM(BPF_RSH, si->dst_reg, 16);
+#else
+		*insn++ = BPF_ALU64_IMM(BPF_RSH, si->dst_reg, 8);
+#endif
+		*insn++ = BPF_ALU64_IMM(BPF_AND, si->dst_reg, 0xff);
 		break;
 
 	case offsetof(struct bpf_sock, src_ip4):
@@ -3297,21 +3311,13 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 				       target_size));
 		break;
 	case offsetof(struct bpf_sock, rx_queue_mapping):
-#ifdef CONFIG_XPS
-		*insn++ = BPF_LDX_MEM(
-			BPF_FIELD_SIZEOF(struct sock, sk_rx_queue_mapping),
-			si->dst_reg, si->src_reg,
-			bpf_target_off(struct sock, sk_rx_queue_mapping,
-				       FIELD_SIZEOF(struct sock,
-						    sk_rx_queue_mapping),
-				       target_size));
-		*insn++ = BPF_JMP_IMM(BPF_JNE, si->dst_reg, NO_QUEUE_MAPPING,
-				      1);
-		*insn++ = BPF_MOV64_IMM(si->dst_reg, -1);
-#else
-		*insn++ = BPF_MOV64_IMM(si->dst_reg, -1);
+		/*
+		 * Linux 4.9 has no per-socket sk_rx_queue_mapping field.
+		 * Report the documented unavailable value instead of
+		 * referencing a field introduced by newer kernels.
+		 */
 		*target_size = 2;
-#endif
+		*insn++ = BPF_MOV64_IMM(si->dst_reg, -1);
 		break;
 	}
 
