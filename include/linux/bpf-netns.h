@@ -29,7 +29,12 @@ to_netns_bpf_attach_type(enum bpf_attach_type attach_type)
 extern struct mutex netns_bpf_mutex;
 
 union bpf_attr;
+struct net;
 struct bpf_prog;
+
+#ifdef CONFIG_BPF_SYSCALL
+int flow_dissector_bpf_prog_attach_check(struct net *net, struct bpf_prog *prog);
+#endif
 
 #ifdef CONFIG_NET
 int netns_bpf_prog_query(const union bpf_attr *attr,
