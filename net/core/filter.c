@@ -3470,14 +3470,12 @@ u32 bpf_tcp_sock_convert_ctx_access(enum bpf_access_type type,
 	case offsetof(struct bpf_tcp_sock, bytes_acked):
 		BPF_TCP_SOCK_GET_COMMON(bytes_acked);
 		break;
-	case offsetof(struct bpf_tcp_sock, dsack_dups):
-		BPF_TCP_SOCK_GET_COMMON(dsack_dups);
-		break;
+	/*
+	 * dsack_dups and delivered_ce are absent from this 4.9 tcp_sock.
+	 * Do not expose these newer bpf_tcp_sock fields on this kernel.
+	 */
 	case offsetof(struct bpf_tcp_sock, delivered):
 		BPF_TCP_SOCK_GET_COMMON(delivered);
-		break;
-	case offsetof(struct bpf_tcp_sock, delivered_ce):
-		BPF_TCP_SOCK_GET_COMMON(delivered_ce);
 		break;
 	case offsetof(struct bpf_tcp_sock, icsk_retransmits):
 		BPF_INET_SOCK_GET_COMMON(icsk_retransmits);
