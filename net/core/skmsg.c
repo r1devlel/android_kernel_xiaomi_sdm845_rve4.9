@@ -4,9 +4,31 @@
 #include <linux/skmsg.h>
 #include <linux/skbuff.h>
 #include <linux/scatterlist.h>
+#include <linux/highmem.h>
 
 #include <net/sock.h>
 #include <net/tcp.h>
+
+/* BPF socket-map metadata is stored in the TCP skb control block. */
+static inline void bpf_compute_data_end_sk_skb(struct sk_buff *skb)
+{
+	TCP_SKB_CB(skb)->bpf.data_end = skb->data + skb_headlen(skb);
+}
+
+static inline bool tcp_skb_bpf_ingress(const struct sk_buff *skb)
+{
+	return TCP_SKB_CB(skb)->bpf.flags & BPF_F_INGRESS;
+}
+
+static inline struct sock *tcp_skb_bpf_redirect_fetch(struct sk_buff *skb)
+{
+	return TCP_SKB_CB(skb)->bpf.sk_redir;
+}
+
+static inline void tcp_skb_bpf_redirect_clear(struct sk_buff *skb)
+{
+	TCP_SKB_CB(skb)->bpf.sk_redir = NULL;
+}
 
 static bool sk_msg_try_coalesce_ok(struct sk_msg *msg, int elem_first_coalesce)
 {
@@ -417,13 +439,52 @@ static int sk_psock_skb_ingress(struct sk_psock *psock, struct sk_buff *skb)
 	return copied;
 }
 
+/*
+ * The 4.9 target has no skb_send_sock_locked() or sendmsg_locked API.
+ * Sockmap handles TCP sockets here. Copying through a temporary page lets
+ * the already-locked TCP send path handle both linear and non-linear skbs.
+ */
+static int sk_psock_skb_send_locked(struct sock *sk, struct sk_buff *skb,
+				    u32 off, u32 len)
+{
+	u32 orig_len = len;
+
+	tcp_rate_check_app_limited(sk);
+	while (len) {
+		struct page *page;
+		void *data;
+		u32 copy = min_t(u32, len, PAGE_SIZE);
+		int ret;
+
+		page = alloc_page(GFP_ATOMIC);
+		if (unlikely(!page))
+			return len == orig_len ? -ENOMEM : orig_len - len;
+
+		data = kmap_atomic(page);
+		ret = skb_copy_bits(skb, off, data, copy);
+		kunmap_atomic(data);
+		if (unlikely(ret)) {
+			put_page(page);
+			return len == orig_len ? -EFAULT : orig_len - len;
+		}
+
+		ret = do_tcp_sendpages(sk, page, 0, copy, MSG_DONTWAIT);
+		put_page(page);
+		if (ret <= 0)
+			return len == orig_len ? ret : orig_len - len;
+
+		off += ret;
+		len -= ret;
+	}
+	return orig_len;
+}
+
 static int sk_psock_handle_skb(struct sk_psock *psock, struct sk_buff *skb,
 			       u32 off, u32 len, bool ingress)
 {
 	if (ingress)
 		return sk_psock_skb_ingress(psock, skb);
-	else
-		return skb_send_sock_locked(psock->sk, skb, off, len);
+	return sk_psock_skb_send_locked(psock->sk, skb, off, len);
 }
 
 static void sk_psock_backlog(struct work_struct *work)
@@ -486,10 +547,7 @@ struct sk_psock *sk_psock_init(struct sock *sk, int node)
 
 	write_lock_bh(&sk->sk_callback_lock);
 
-	if (inet_csk_has_ulp(sk)) {
-		psock = ERR_PTR(-EINVAL);
-		goto out;
-	}
+	/* This 4.9 target has no ULP hook fields, so there is no ULP to reject. */
 
 	if (sk->sk_user_data) {
 		psock = ERR_PTR(-EBUSY);
