@@ -32,11 +32,11 @@ void *bpf_jit_alloc_exec_page(void)
 	if (!image)
 		return NULL;
 
-	set_vm_flush_reset_perms(image);
-	/* Keep image as writeable. The alternative is to keep flipping ro/rw
-	 * everytime new program is attached or detached.
+	/* On arm64, bpf_jit_alloc_exec() falls back to module_alloc(), which
+	 * maps memory with PAGE_KERNEL_EXEC. Kernel 4.9 has no
+	 * set_vm_flush_reset_perms() helper, so don't mutate the vmalloc
+	 * area's permission-reset state here.
 	 */
-	set_memory_x((long)image, 1);
 	return image;
 }
 
@@ -45,15 +45,14 @@ void bpf_image_ksym_add(void *data, struct bpf_ksym *ksym)
 	ksym->start = (unsigned long) data;
 	ksym->end = ksym->start + PAGE_SIZE;
 	bpf_ksym_add(ksym);
-	perf_event_ksymbol(PERF_RECORD_KSYMBOL_TYPE_BPF, ksym->start,
-			   PAGE_SIZE, false, ksym->name);
+	/* This 4.9 tree has no PERF_RECORD_KSYMBOL_TYPE_BPF ABI. The BPF
+	 * symbol is still registered internally for kallsyms lookup.
+	 */
 }
 
 void bpf_image_ksym_del(struct bpf_ksym *ksym)
 {
 	bpf_ksym_del(ksym);
-	perf_event_ksymbol(PERF_RECORD_KSYMBOL_TYPE_BPF, ksym->start,
-			   PAGE_SIZE, true, ksym->name);
 }
 
 static struct bpf_trampoline *bpf_trampoline_lookup(u64 key)
@@ -91,10 +90,12 @@ static int unregister_fentry(struct bpf_trampoline *tr, void *old_addr)
 	void *ip = tr->func.addr;
 	int ret;
 
+	/* Direct-ftrace APIs are not present in this 4.9 tree. Never patch
+	 * an entry owned by ftrace through the raw text-poke path.
+	 */
 	if (tr->func.ftrace_managed)
-		ret = unregister_ftrace_direct((long)ip, (long)old_addr);
-	else
-		ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, old_addr, NULL);
+		return -EOPNOTSUPP;
+	ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, old_addr, NULL);
 	return ret;
 }
 
@@ -103,10 +104,12 @@ static int modify_fentry(struct bpf_trampoline *tr, void *old_addr, void *new_ad
 	void *ip = tr->func.addr;
 	int ret;
 
+	/* See unregister_fentry(): direct-ftrace redirection needs a real
+	 * 4.9 ftrace integration, not an unsafe raw instruction patch.
+	 */
 	if (tr->func.ftrace_managed)
-		ret = modify_ftrace_direct((long)ip, (long)old_addr, (long)new_addr);
-	else
-		ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, old_addr, new_addr);
+		return -EOPNOTSUPP;
+	ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, old_addr, new_addr);
 	return ret;
 }
 
@@ -118,13 +121,15 @@ static int register_fentry(struct bpf_trampoline *tr, void *new_addr)
 	int ret;
 
 	faddr = ftrace_location((unsigned long)ip);
-	if (faddr)
-		tr->func.ftrace_managed = true;
-
-	if (tr->func.ftrace_managed)
-		ret = register_ftrace_direct((long)ip, (long)new_addr);
-	else
-		ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, NULL, new_addr);
+	if (faddr) {
+		/* Kernel 4.9 lacks register_ftrace_direct(). Refuse this target
+		 * until direct-ftrace integration is ported; raw patching here
+		 * would overwrite an entry already managed by ftrace.
+		 */
+		return -EOPNOTSUPP;
+	}
+	tr->func.ftrace_managed = false;
+	ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, NULL, new_addr);
 	return ret;
 }
 
