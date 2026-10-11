@@ -13,4 +13,5 @@ endif
 obj-$(CONFIG_CGROUP_BPF) += cgroup.o local_storage.o
 ifeq ($(CONFIG_NET),y)
 obj-$(CONFIG_BPF_SYSCALL) += bpf_local_storage.o net_namespace.o
+obj-$(CONFIG_BPF_SYSCALL) += devmap.o cpumap.o
 endif
