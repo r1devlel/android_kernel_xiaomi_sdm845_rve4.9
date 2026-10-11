@@ -805,8 +805,9 @@ struct tcp_skb_cb {
 			struct skb_mstamp delivered_mstamp;
 		} tx;   /* only used for outgoing skbs */
 		struct {
-			u64 flags;
+			__u32 flags;
 			struct sock *sk_redir;
+			void *data_end;
 		} bpf;
 		union {
 			struct inet_skb_parm	h4;
@@ -818,6 +819,10 @@ struct tcp_skb_cb {
 };
 
 #define TCP_SKB_CB(__skb)	((struct tcp_skb_cb *)&((__skb)->cb[0]))
+
+/* Used by the 4.9 BPF sockmap path while the TCP socket is locked. */
+ssize_t do_tcp_sendpages(struct sock *sk, struct page *page, int offset,
+			 size_t size, int flags);
 
 #ifdef CONFIG_BPF_SYSCALL
 struct sk_psock;
