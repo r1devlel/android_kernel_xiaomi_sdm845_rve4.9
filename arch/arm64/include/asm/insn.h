@@ -82,6 +82,9 @@ enum aarch64_insn_register_type {
 	AARCH64_INSN_REGTYPE_RA,
 };
 
+/* RS occupies the same instruction field as RM (bits 20:16). */
+#define AARCH64_INSN_REGTYPE_RS AARCH64_INSN_REGTYPE_RM
+
 enum aarch64_insn_register {
 	AARCH64_INSN_REG_0  = 0,
 	AARCH64_INSN_REG_1  = 1,
