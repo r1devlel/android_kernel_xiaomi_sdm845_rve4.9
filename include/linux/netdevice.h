@@ -65,6 +65,7 @@ struct mpls_dev;
 /* UDP Tunnel offloads */
 struct udp_tunnel_info;
 struct bpf_prog;
+struct xdp_dev_bulk_queue;
 
 void netdev_set_default_ethtool_ops(struct net_device *dev,
 				    const struct ethtool_ops *ops);
@@ -1823,6 +1824,7 @@ struct net_device {
  * Cache lines mostly used on transmit path
  */
 	struct netdev_queue	*_tx ____cacheline_aligned_in_smp;
+	struct xdp_dev_bulk_queue __percpu *xdp_bulkq;
 	unsigned int		num_tx_queues;
 	unsigned int		real_num_tx_queues;
 	struct Qdisc		*qdisc;
