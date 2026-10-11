@@ -71,7 +71,9 @@
 #include <net/bpf_sk_storage.h>
 #include <net/transp_v6.h>
 #include <linux/btf_ids.h>
+#ifdef CONFIG_TLS
 #include <net/tls.h>
+#endif
 
 static const struct bpf_func_proto *
 bpf_sk_base_func_proto(enum bpf_func_id func_id);
@@ -3615,11 +3617,13 @@ BPF_CALL_4(sk_skb_adjust_room, struct sk_buff *, skb, s32, len_diff,
 		__skb_pull(skb, len_diff_abs);
 	}
 	bpf_compute_data_end_sk_skb(skb);
+#ifdef CONFIG_TLS
 	if (tls_sw_has_ctx_rx(skb->sk)) {
 		struct strp_msg *rxm = strp_msg(skb);
 
 		rxm->full_len += len_diff;
 	}
+#endif
 	return ret;
 }
 
