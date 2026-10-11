@@ -1547,18 +1547,30 @@ EXPORT_SYMBOL_GPL(sk_attach_filter);
 int sk_reuseport_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 {
 	struct bpf_prog *prog = __get_filter(fprog, sk);
+	struct bpf_prog *old_prog;
 	int err;
 
 	if (IS_ERR(prog))
 		return PTR_ERR(prog);
 
-	if (bpf_prog_size(prog->len) > sysctl_optmem_max)
+	if (bpf_prog_size(prog->len) > sysctl_optmem_max) {
 		err = -ENOMEM;
-	else
-		err = reuseport_attach_prog(sk, prog);
+	} else if (sk_unhashed(sk) && sk->sk_reuseport) {
+		err = reuseport_alloc(sk);
+	} else if (!rcu_access_pointer(sk->sk_reuseport_cb)) {
+		/* The socket wasn't bound with SO_REUSEPORT. */
+		err = -EINVAL;
+	} else {
+		err = 0;
+	}
 
-	if (err)
+	if (!err) {
+		old_prog = reuseport_attach_prog(sk, prog);
+		if (old_prog)
+			bpf_prog_destroy(old_prog);
+	} else {
 		__bpf_prog_release(prog);
+	}
 
 	return err;
 }
