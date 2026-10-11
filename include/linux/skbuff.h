@@ -922,6 +922,8 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t priority, int flags,
 			    int node);
 struct sk_buff *__build_skb(void *data, unsigned int frag_size);
 struct sk_buff *build_skb(void *data, unsigned int frag_size);
+struct sk_buff *build_skb_around(struct sk_buff *skb,
+                                 void *data, unsigned int frag_size);
 static inline struct sk_buff *alloc_skb(unsigned int size,
 					gfp_t priority)
 {
@@ -3256,10 +3258,17 @@ static inline void skb_get_timestampns(const struct sk_buff *skb,
 	*stamp = ktime_to_timespec(skb->tstamp);
 }
 
-/* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet. */
+/* BPF metadata compatibility: 4.9 has no skb_shared_info::meta_len yet.
+ * Metadata length is therefore not represented in sk_buff on this kernel.
+ */
 static inline unsigned int skb_metadata_len(const struct sk_buff *skb)
 {
 	return 0;
+}
+
+static inline void skb_metadata_set(struct sk_buff *skb, u8 meta_len)
+{
+	/* No skb_shared_info::meta_len field exists in this 4.9 tree. */
 }
 
 static inline void __net_timestamp(struct sk_buff *skb)

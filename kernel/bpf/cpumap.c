@@ -27,7 +27,7 @@
 #include <linux/capability.h>
 #include <trace/events/xdp.h>
 
-#include <linux/netdevice.h>   /* netif_receive_skb_core */
+#include <linux/netdevice.h>   /* netif_receive_skb */
 #include <linux/etherdevice.h> /* eth_type_trans */
 
 /* General idea: XDP packets getting XDP redirected to another CPU,
@@ -371,7 +371,7 @@ static int cpu_map_kthread_run(void *data)
 			}
 
 			/* Inject into network stack */
-			ret = netif_receive_skb_core(skb);
+			ret = netif_receive_skb(skb);
 			if (ret == NET_RX_DROP)
 				drops++;
 		}
