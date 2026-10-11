@@ -8,7 +8,6 @@
 #include <linux/wait.h>
 
 #include <net/inet_common.h>
-#include <net/tls.h>
 
 int __tcp_bpf_recvmsg(struct sock *sk, struct sk_psock *psock,
 		      struct msghdr *msg, int len, int flags)
@@ -147,8 +146,6 @@ static int tcp_bpf_push(struct sock *sk, struct sk_msg *msg, u32 apply_bytes,
 	u32 off;
 
 	while (1) {
-		bool has_tx_ulp;
-
 		sge = sk_msg_elem(msg, msg->sg.start);
 		size = (apply && apply_bytes < sge->length) ?
 			apply_bytes : sge->length;
@@ -157,14 +154,8 @@ static int tcp_bpf_push(struct sock *sk, struct sk_msg *msg, u32 apply_bytes,
 
 		tcp_rate_check_app_limited(sk);
 retry:
-		has_tx_ulp = tls_sw_has_ctx_tx(sk);
-		if (has_tx_ulp) {
-			flags |= MSG_SENDPAGE_NOPOLICY;
-			ret = kernel_sendpage_locked(sk,
-						     page, off, size, flags);
-		} else {
-			ret = do_tcp_sendpages(sk, page, off, size, flags);
-		}
+		/* This 4.9 target tree has no TLS ULP API. */
+		ret = do_tcp_sendpages(sk, page, off, size, flags);
 
 		if (ret <= 0)
 			return ret;
