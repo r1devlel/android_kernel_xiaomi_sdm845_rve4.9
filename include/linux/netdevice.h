@@ -66,6 +66,7 @@ struct mpls_dev;
 struct udp_tunnel_info;
 struct bpf_prog;
 struct xdp_dev_bulk_queue;
+struct xdp_frame;
 
 void netdev_set_default_ethtool_ops(struct net_device *dev,
 				    const struct ethtool_ops *ops);
@@ -1143,6 +1144,8 @@ struct net_device_ops {
 	int			(*ndo_stop)(struct net_device *dev);
 	netdev_tx_t		(*ndo_start_xmit)(struct sk_buff *skb,
 						  struct net_device *dev);
+	int			(*ndo_xdp_xmit)(struct net_device *dev, int n,
+					 struct xdp_frame **xdp, u32 flags);
 	netdev_features_t	(*ndo_features_check)(struct sk_buff *skb,
 						      struct net_device *dev,
 						      netdev_features_t features);

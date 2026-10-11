@@ -281,8 +281,7 @@ struct bpf_dtab_netdev *__dev_map_hash_lookup_elem(struct bpf_map *map, u32 key)
 	struct hlist_head *head = dev_map_index_hash(dtab, key);
 	struct bpf_dtab_netdev *dev;
 
-	hlist_for_each_entry_rcu(dev, head, index_hlist,
-				 lockdep_is_held(&dtab->index_lock))
+	hlist_for_each_entry_rcu(dev, head, index_hlist)
 		if (dev->idx == key)
 			return dev;
 
@@ -371,7 +370,8 @@ out:
 
 	trace_xdp_devmap_xmit(bq->dev_rx, dev, sent, drops, err);
 	bq->dev_rx = NULL;
-	__list_del_clearprev(&bq->flush_node);
+	__list_del_entry(&bq->flush_node);
+	WRITE_ONCE(bq->flush_node.prev, NULL);
 	return;
 error:
 	/* If ndo_xdp_xmit fails with an errno, no frames have been

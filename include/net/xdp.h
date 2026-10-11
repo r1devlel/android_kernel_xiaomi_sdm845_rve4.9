@@ -240,6 +240,9 @@ xdp_data_meta_unsupported(const struct xdp_buff *xdp)
 	return unlikely(xdp->data_meta > xdp->data);
 }
 
+struct bpf_prog;
+void generic_xdp_tx(struct sk_buff *skb, struct bpf_prog *xdp_prog);
+
 struct xdp_attachment_info {
 	struct bpf_prog *prog;
 	u32 flags;

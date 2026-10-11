@@ -9,6 +9,13 @@
 #include <linux/filter.h>
 #include <linux/tracepoint.h>
 
+#ifndef __DEVMAP_OBJ_TYPE
+#define __DEVMAP_OBJ_TYPE
+struct _bpf_dtab_netdev {
+	struct net_device *dev;
+};
+#endif /* __DEVMAP_OBJ_TYPE */
+
 TRACE_EVENT(xdp_exception,
 
 	TP_PROTO(const struct net_device *dev,
