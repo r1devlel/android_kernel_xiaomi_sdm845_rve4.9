@@ -7,7 +7,6 @@
 #include <linux/rbtree_latch.h>
 #include <linux/perf_event.h>
 #include <linux/btf.h>
-#include <linux/rcupdate_trace.h>
 #include <linux/rcupdate.h>
 
 /* dummy _ops. The verifier will operate on target program's ops. */
@@ -201,7 +200,7 @@ static void __bpf_tramp_image_put_rcu_tasks(struct rcu_head *rcu)
 static void bpf_tramp_image_put(struct bpf_tramp_image *im)
 {
 	/* The trampoline image that calls original function is using:
-	 * rcu_read_lock_trace to protect sleepable bpf progs
+	 * sleepable BPF programs are rejected on this 4.9 base
 	 * rcu_read_lock to protect normal bpf progs
 	 * percpu_ref to protect trampoline itself
 	 * rcu tasks to protect trampoline asm not covered by percpu_ref
@@ -239,11 +238,12 @@ static void bpf_tramp_image_put(struct bpf_tramp_image *im)
 
 	/* The trampoline without fexit and fmod_ret progs doesn't call original
 	 * function and doesn't use percpu_ref.
-	 * Use call_rcu_tasks_trace() to wait for sleepable progs to finish.
+	 * Sleepable BPF programs are rejected on this 4.9 base, so task RCU is
+ * sufficient for the supported non-sleepable trampoline programs.
 	 * Then use call_rcu_tasks() to wait for the rest of trampoline asm
 	 * and normal progs.
 	 */
-	call_rcu_tasks_trace(&im->rcu, __bpf_tramp_image_put_rcu_tasks);
+	call_rcu_tasks(&im->rcu, __bpf_tramp_image_put_rcu_tasks);
 }
 
 static struct bpf_tramp_image *bpf_tramp_image_alloc(u64 key, u32 idx)
@@ -522,15 +522,17 @@ void notrace __bpf_prog_exit(struct bpf_prog *prog, u64 start)
 	rcu_read_unlock();
 }
 
+/* Sleepable BPF programs are rejected by bpf_prog_load() on this 4.9 base.
+ * Keep these symbols for trampoline code compatibility, but they must remain
+ * unreachable until proper sleepable-program RCU support is ported.
+ */
 void notrace __bpf_prog_enter_sleepable(void)
 {
-	rcu_read_lock_trace();
 	might_fault();
 }
 
 void notrace __bpf_prog_exit_sleepable(void)
 {
-	rcu_read_unlock_trace();
 }
 
 void notrace __bpf_tramp_enter(struct bpf_tramp_image *tr)
