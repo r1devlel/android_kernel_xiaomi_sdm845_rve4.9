@@ -773,7 +773,7 @@ u32 aarch64_insn_gen_load_store_ex(enum aarch64_insn_register reg,
 		insn = aarch64_insn_get_store_ex_value();
 		break;
 	default:
-		pr_err("%s: unknown load/store exclusive encoding %d\\n", __func__, type);
+		pr_err("%s: unknown load/store exclusive encoding %d\n", __func__, type);
 		return AARCH64_BREAK_FAULT;
 	}
 
@@ -798,7 +798,7 @@ u32 aarch64_insn_gen_ldadd(enum aarch64_insn_register result,
 	case AARCH64_INSN_SIZE_64:
 		break;
 	default:
-		pr_err("%s: unimplemented size encoding %d\\n", __func__, size);
+		pr_err("%s: unimplemented size encoding %d\n", __func__, size);
 		return AARCH64_BREAK_FAULT;
 	}
 
