@@ -1961,7 +1961,6 @@ BPF_CALL_5(bpf_l4_csum_replace, struct sk_buff *, skb, u32, offset,
 	bool is_pseudo = flags & BPF_F_PSEUDO_HDR;
 	bool is_mmzero = flags & BPF_F_MARK_MANGLED_0;
 	bool do_mforce = flags & BPF_F_MARK_ENFORCE;
-	bool is_ipv6   = flags & BPF_F_IPV6;
 	__sum16 *ptr;
 
 	if (unlikely(flags & ~(BPF_F_MARK_MANGLED_0 | BPF_F_MARK_ENFORCE |
@@ -1981,7 +1980,7 @@ BPF_CALL_5(bpf_l4_csum_replace, struct sk_buff *, skb, u32, offset,
 		if (unlikely(from != 0))
 			return -EINVAL;
 
-		inet_proto_csum_replace_by_diff(ptr, skb, to, is_pseudo, is_ipv6);
+		inet_proto_csum_replace_by_diff(ptr, skb, to, is_pseudo);
 		break;
 	case 2:
 		inet_proto_csum_replace2(ptr, skb, from, to, is_pseudo);
@@ -2131,7 +2130,7 @@ static inline int __bpf_tx_skb(struct net_device *dev, struct sk_buff *skb)
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp = ktime_set(0, 0);
 
 	dev_xmit_recursion_inc();
 	ret = dev_queue_xmit(skb);
@@ -2209,7 +2208,7 @@ static int bpf_out_neigh_v6(struct net *net, struct sk_buff *skb,
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp = ktime_set(0, 0);
 
 	if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
 		struct sk_buff *skb2;
@@ -2316,7 +2315,7 @@ static int bpf_out_neigh_v4(struct net *net, struct sk_buff *skb,
 	}
 
 	skb->dev = dev;
-	skb->tstamp = 0;
+	skb->tstamp = ktime_set(0, 0);
 
 	if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
 		struct sk_buff *skb2;
@@ -3310,7 +3309,7 @@ static int bpf_skb_net_hdr_pop(struct sk_buff *skb, u32 off, u32 len)
 static int bpf_skb_proto_4_to_6(struct sk_buff *skb)
 {
 	const u32 len_diff = sizeof(struct ipv6hdr) - sizeof(struct iphdr);
-	u32 off = skb_mac_header_len(skb);
+	u32 off = (skb->network_header - skb->mac_header);
 	int ret;
 
 	ret = skb_cow(skb, len_diff);
@@ -3340,7 +3339,7 @@ static int bpf_skb_proto_4_to_6(struct sk_buff *skb)
 static int bpf_skb_proto_6_to_4(struct sk_buff *skb)
 {
 	const u32 len_diff = sizeof(struct ipv6hdr) - sizeof(struct iphdr);
-	u32 off = skb_mac_header_len(skb);
+	u32 off = (skb->network_header - skb->mac_header);
 	int ret;
 
 	ret = skb_unclone(skb, GFP_ATOMIC);
@@ -3672,7 +3671,7 @@ BPF_CALL_4(bpf_skb_adjust_room, struct sk_buff *, skb, s32, len_diff,
 		     proto != htons(ETH_P_IPV6)))
 		return -ENOTSUPP;
 
-	off = skb_mac_header_len(skb);
+	off = (skb->network_header - skb->mac_header);
 	switch (mode) {
 	case BPF_ADJ_ROOM_NET:
 		off += bpf_skb_net_base_len(skb);
