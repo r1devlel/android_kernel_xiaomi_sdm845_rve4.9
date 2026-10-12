@@ -51,6 +51,7 @@
 #include <linux/seccomp.h>
 #include <linux/if_vlan.h>
 #include <linux/bpf.h>
+#include <linux/bpf_backport.h>
 #include <linux/btf.h>
 #include <net/sch_generic.h>
 #include <net/cls_cgroup.h>
