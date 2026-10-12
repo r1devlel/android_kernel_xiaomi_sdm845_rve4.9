@@ -82,6 +82,13 @@
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+/* Linux 4.9 has no dedicated sk_skb control-buffer wrapper. */
+struct sk_skb_cb {
+	u32 data[5];
+};
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
 /*
  * In Linux 4.9, SOCK_RCU_FREE marks sockets that do not need a reference
  * taken by this BPF lookup/release path.
@@ -9065,8 +9072,13 @@ static u32 sock_ops_convert_ctx_access(enum bpf_access_type type,
 		break;
 
 	case offsetof(struct bpf_sock_ops, bpf_sock_ops_cb_flags):
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/* This TCP callback flag field does not exist in Linux 4.9. */
+		*insn++ = BPF_MOV32_IMM(si->dst_reg, 0);
+#else
 		SOCK_OPS_GET_FIELD(bpf_sock_ops_cb_flags, bpf_sock_ops_cb_flags,
 				   struct tcp_sock);
+#endif
 		break;
 
 	case offsetof(struct bpf_sock_ops, sk_txhash):
@@ -9578,8 +9590,14 @@ static void bpf_init_reuseport_kern(struct sk_reuseport_kern *reuse_kern,
 	reuse_kern->selected_sk = NULL;
 	reuse_kern->data_end = skb->data + skb_headlen(skb);
 	reuse_kern->hash = hash;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	/* These group metadata fields were added after Linux 4.9. */
+	reuse_kern->reuseport_id = 0;
+	reuse_kern->bind_inany = 0;
+#else
 	reuse_kern->reuseport_id = reuse->reuseport_id;
 	reuse_kern->bind_inany = reuse->bind_inany;
+#endif
 }
 
 struct sock *bpf_run_sk_reuseport(struct sock_reuseport *reuse, struct sock *sk,
@@ -9623,7 +9641,11 @@ BPF_CALL_4(sk_select_reuseport, struct sk_reuseport_kern *, reuse_kern,
 		goto error;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	if (unlikely(reuse != rcu_dereference(reuse_kern->sk->sk_reuseport_cb))) {
+#else
 	if (unlikely(reuse->reuseport_id != reuse_kern->reuseport_id)) {
+#endif
 		struct sock *sk = reuse_kern->sk;
 
 		if (sk->sk_protocol != selected_sk->sk_protocol) {
@@ -9792,7 +9814,19 @@ static u32 sk_reuseport_convert_ctx_access(enum bpf_access_type type,
 		break;
 
 	case offsetof(struct sk_reuseport_md, ip_protocol):
+		*insn++ = BPF_LDX_MEM(
+			BPF_FIELD_SIZEOF(struct sk_reuseport_kern, sk),
+			si->dst_reg, si->src_reg,
+			offsetof(struct sk_reuseport_kern, sk));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/* sk_protocol is a bit-field in the Linux 4.9 sock layout. */
+		*target_size = sizeof(u8);
+		*insn++ = BPF_LDX_MEM(BPF_B, si->dst_reg, si->dst_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(unsigned int) + 1);
+#else
 		SK_REUSEPORT_LOAD_SK_FIELD(sk_protocol);
+#endif
 		break;
 
 	case offsetof(struct sk_reuseport_md, data_end):
