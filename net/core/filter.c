@@ -81,6 +81,17 @@
 #include <net/tls.h>
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+/*
+ * In Linux 4.9, SOCK_RCU_FREE marks sockets that do not need a reference
+ * taken by this BPF lookup/release path.
+ */
+static inline bool sk_is_refcounted(struct sock *sk)
+{
+	return !sock_flag(sk, SOCK_RCU_FREE);
+}
+#endif
+
 static const struct bpf_func_proto *
 bpf_sk_base_func_proto(enum bpf_func_id func_id);
 
@@ -5318,6 +5329,12 @@ static const struct bpf_func_proto bpf_sock_ops_getsockopt_proto = {
 BPF_CALL_2(bpf_sock_ops_cb_flags_set, struct bpf_sock_ops_kern *, bpf_sock,
 	   int, argval)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	/* The 4.9 TCP stack has no callback-flag plumbing to update. */
+	(void)bpf_sock;
+	(void)argval;
+	return -EOPNOTSUPP;
+#else
 	struct sock *sk = bpf_sock->sk;
 	int val = argval & BPF_SOCK_OPS_ALL_CB_FLAGS;
 
@@ -5327,6 +5344,7 @@ BPF_CALL_2(bpf_sock_ops_cb_flags_set, struct bpf_sock_ops_kern *, bpf_sock,
 	tcp_sk(sk)->bpf_sock_ops_cb_flags = val;
 
 	return argval & (~BPF_SOCK_OPS_ALL_CB_FLAGS);
+#endif
 }
 
 static const struct bpf_func_proto bpf_sock_ops_cb_flags_set_proto = {
@@ -5343,6 +5361,13 @@ EXPORT_SYMBOL_GPL(ipv6_bpf_stub);
 BPF_CALL_3(bpf_bind, struct bpf_sock_addr_kern *, ctx, struct sockaddr *, addr,
 	   int, addr_len)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	/* Linux 4.9 has neither __inet_bind() nor the BPF bind flags. */
+	(void)ctx;
+	(void)addr;
+	(void)addr_len;
+	return -EOPNOTSUPP;
+#else
 #ifdef CONFIG_INET
 	struct sock *sk = ctx->sk;
 	u32 flags = BIND_FROM_BPF;
@@ -5372,6 +5397,7 @@ BPF_CALL_3(bpf_bind, struct bpf_sock_addr_kern *, ctx, struct sockaddr *, addr,
 #endif /* CONFIG_INET */
 
 	return -EAFNOSUPPORT;
+#endif
 }
 
 static const struct bpf_func_proto bpf_bind_proto = {
@@ -5440,25 +5466,47 @@ static struct sock *sk_lookup(struct net *net, struct bpf_sock_tuple *tuple,
 		__be32 src4 = tuple->ipv4.saddr;
 		__be32 dst4 = tuple->ipv4.daddr;
 
-		if (proto == IPPROTO_TCP)
+		if (proto == IPPROTO_TCP) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+			sk = __inet_lookup(net, &tcp_hashinfo, NULL, 0,
+					   src4, tuple->ipv4.sport,
+					   dst4, tuple->ipv4.dport,
+					   dif, &refcounted);
+#else
 			sk = __inet_lookup(net, &tcp_hashinfo, NULL, 0,
 					   src4, tuple->ipv4.sport,
 					   dst4, tuple->ipv4.dport,
 					   dif, sdif, &refcounted);
-		else
+#endif
+		} else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+			sk = __udp4_lib_lookup(net, src4, tuple->ipv4.sport,
+					       dst4, tuple->ipv4.dport,
+					       dif, &udp_table, NULL);
+#else
 			sk = __udp4_lib_lookup(net, src4, tuple->ipv4.sport,
 					       dst4, tuple->ipv4.dport,
 					       dif, sdif, &udp_table, NULL);
+#endif
+		}
 #if IS_ENABLED(CONFIG_IPV6)
 	} else {
 		struct in6_addr *src6 = (struct in6_addr *)&tuple->ipv6.saddr;
 		struct in6_addr *dst6 = (struct in6_addr *)&tuple->ipv6.daddr;
 
-		if (proto == IPPROTO_TCP)
+		if (proto == IPPROTO_TCP) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+			sk = __inet6_lookup(net, &tcp_hashinfo, NULL, 0,
+					    src6, tuple->ipv6.sport,
+					    dst6, ntohs(tuple->ipv6.dport),
+					    dif, &refcounted);
+#else
 			sk = __inet6_lookup(net, &tcp_hashinfo, NULL, 0,
 					    src6, tuple->ipv6.sport,
 					    dst6, ntohs(tuple->ipv6.dport),
 					    dif, sdif, &refcounted);
+#endif
+		}
 		else if (likely(ipv6_bpf_stub))
 			sk = ipv6_bpf_stub->udp6_lib_lookup(net,
 							    src6, tuple->ipv6.sport,
@@ -5501,10 +5549,15 @@ __bpf_skc_lookup(struct sk_buff *skb, struct bpf_sock_tuple *tuple, u32 len,
 		goto out;
 
 	if (sdif < 0) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/* 4.9 lookup APIs do not take an SDIF argument. */
+		sdif = 0;
+#else
 		if (family == AF_INET)
 			sdif = inet_sdif(skb);
 		else
 			sdif = inet6_sdif(skb);
+#endif
 	}
 
 	if ((s32)netns_id < 0) {
@@ -5676,7 +5729,12 @@ BPF_CALL_5(bpf_xdp_sk_lookup_udp, struct xdp_buff *, ctx,
 	   struct bpf_sock_tuple *, tuple, u32, len, u32, netns_id, u64, flags)
 {
 	struct net_device *dev = ctx->rxq->dev;
-	int ifindex = dev->ifindex, sdif = dev_sdif(dev);
+	int ifindex = dev->ifindex, sdif =
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		0;
+#else
+		dev_sdif(dev);
+#endif
 	struct net *caller_net = dev_net(dev);
 
 	return (unsigned long)__bpf_sk_lookup(NULL, tuple, len, caller_net,
@@ -5700,7 +5758,12 @@ BPF_CALL_5(bpf_xdp_skc_lookup_tcp, struct xdp_buff *, ctx,
 	   struct bpf_sock_tuple *, tuple, u32, len, u32, netns_id, u64, flags)
 {
 	struct net_device *dev = ctx->rxq->dev;
-	int ifindex = dev->ifindex, sdif = dev_sdif(dev);
+	int ifindex = dev->ifindex, sdif =
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		0;
+#else
+		dev_sdif(dev);
+#endif
 	struct net *caller_net = dev_net(dev);
 
 	return (unsigned long)__bpf_skc_lookup(NULL, tuple, len, caller_net,
@@ -5724,7 +5787,12 @@ BPF_CALL_5(bpf_xdp_sk_lookup_tcp, struct xdp_buff *, ctx,
 	   struct bpf_sock_tuple *, tuple, u32, len, u32, netns_id, u64, flags)
 {
 	struct net_device *dev = ctx->rxq->dev;
-	int ifindex = dev->ifindex, sdif = dev_sdif(dev);
+	int ifindex = dev->ifindex, sdif =
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		0;
+#else
+		dev_sdif(dev);
+#endif
 	struct net *caller_net = dev_net(dev);
 
 	return (unsigned long)__bpf_sk_lookup(NULL, tuple, len, caller_net,
@@ -5928,9 +5996,16 @@ u32 bpf_tcp_sock_convert_ctx_access(enum bpf_access_type type,
 	case offsetof(struct bpf_tcp_sock, bytes_acked):
 		BPF_TCP_SOCK_GET_COMMON(bytes_acked);
 		break;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	case offsetof(struct bpf_tcp_sock, dsack_dups):
+		/* The 4.9 TCP stack does not track this counter. */
+		*insn++ = BPF_MOV64_IMM(si->dst_reg, 0);
+		break;
+#else
 	case offsetof(struct bpf_tcp_sock, dsack_dups):
 		BPF_TCP_SOCK_GET_COMMON(dsack_dups);
 		break;
+#endif
 	case offsetof(struct bpf_tcp_sock, delivered):
 		BPF_TCP_SOCK_GET_COMMON(delivered);
 		break;
