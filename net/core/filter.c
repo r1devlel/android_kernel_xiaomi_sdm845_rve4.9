@@ -5269,7 +5269,8 @@ static int bpf_sock_ops_get_syn(struct bpf_sock_ops_kern *bpf_sock,
 			ret = saved_syn->mac_hdrlen +
 				saved_syn->network_hdrlen +
 				saved_syn->tcp_hdrlen;
-		}#endif
+		}
+#endif
 	}
 
 	*start = hdr_start;
