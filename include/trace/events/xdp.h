@@ -17,6 +17,76 @@ struct _bpf_dtab_netdev {
 };
 #endif /* __DEVMAP_OBJ_TYPE */
 
+
+/* Backported BPF redirect tracepoints used by net/core/filter.c. */
+#define devmap_ifindex(tgt, map) \
+	(((map->map_type == BPF_MAP_TYPE_DEVMAP || \
+	   map->map_type == BPF_MAP_TYPE_DEVMAP_HASH)) ? \
+	  ((struct _bpf_dtab_netdev *)tgt)->dev->ifindex : 0)
+
+DECLARE_EVENT_CLASS(xdp_redirect_template,
+	TP_PROTO(const struct net_device *dev, const struct bpf_prog *xdp,
+		 const void *tgt, int err, const struct bpf_map *map, u32 index),
+	TP_ARGS(dev, xdp, tgt, err, map, index),
+	TP_STRUCT__entry(
+		__field(int, prog_id)
+		__field(u32, act)
+		__field(int, ifindex)
+		__field(int, err)
+		__field(int, to_ifindex)
+		__field(u32, map_id)
+		__field(int, map_index)
+	),
+	TP_fast_assign(
+		__entry->prog_id = xdp->aux->id;
+		__entry->act = XDP_REDIRECT;
+		__entry->ifindex = dev->ifindex;
+		__entry->err = err;
+		__entry->to_ifindex = map ? devmap_ifindex(tgt, map) : index;
+		__entry->map_id = map ? map->id : 0;
+		__entry->map_index = map ? index : 0;
+	),
+	TP_printk("prog_id=%d action=%u ifindex=%d to_ifindex=%d err=%d map_id=%u map_index=%d",
+		  __entry->prog_id, __entry->act, __entry->ifindex,
+		  __entry->to_ifindex, __entry->err, __entry->map_id,
+		  __entry->map_index)
+);
+
+DEFINE_EVENT(xdp_redirect_template, xdp_redirect,
+	TP_PROTO(const struct net_device *dev, const struct bpf_prog *xdp,
+		 const void *tgt, int err, const struct bpf_map *map, u32 index),
+	TP_ARGS(dev, xdp, tgt, err, map, index)
+);
+
+DEFINE_EVENT(xdp_redirect_template, xdp_redirect_err,
+	TP_PROTO(const struct net_device *dev, const struct bpf_prog *xdp,
+		 const void *tgt, int err, const struct bpf_map *map, u32 index),
+	TP_ARGS(dev, xdp, tgt, err, map, index)
+);
+
+#define _trace_xdp_redirect(dev, xdp, to) \
+	trace_xdp_redirect(dev, xdp, NULL, 0, NULL, to)
+#define _trace_xdp_redirect_err(dev, xdp, to, err) \
+	trace_xdp_redirect_err(dev, xdp, NULL, err, NULL, to)
+#define _trace_xdp_redirect_map(dev, xdp, to, map, index) \
+	trace_xdp_redirect(dev, xdp, to, 0, map, index)
+#define _trace_xdp_redirect_map_err(dev, xdp, to, map, index, err) \
+	trace_xdp_redirect_err(dev, xdp, to, err, map, index)
+
+/* Retain older event names for compatibility with trace consumers. */
+DEFINE_EVENT(xdp_redirect_template, xdp_redirect_map,
+	TP_PROTO(const struct net_device *dev, const struct bpf_prog *xdp,
+		 const void *tgt, int err, const struct bpf_map *map, u32 index),
+	TP_ARGS(dev, xdp, tgt, err, map, index)
+);
+
+DEFINE_EVENT(xdp_redirect_template, xdp_redirect_map_err,
+	TP_PROTO(const struct net_device *dev, const struct bpf_prog *xdp,
+		 const void *tgt, int err, const struct bpf_map *map, u32 index),
+	TP_ARGS(dev, xdp, tgt, err, map, index)
+);
+
+
 TRACE_EVENT(xdp_exception,
 
 	TP_PROTO(const struct net_device *dev,

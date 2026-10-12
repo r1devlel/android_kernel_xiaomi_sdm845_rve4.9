@@ -2,6 +2,8 @@
 #define BPF_BACKPORT_H
 
 #include <linux/version.h>
+#include <linux/cgroup.h>
+#include <linux/sock_diag.h>
 #include <linux/skbuff.h>
 #include <net/neighbour.h>
 
@@ -164,5 +166,41 @@ static inline void bpf_compute_data_end_sk_skb(struct sk_buff *skb)
 #endif
 
 #endif /* KERNEL_VERSION < 5.0.0 */
+
+
+/* ===== Linux 4.9 BPF API compatibility ===== */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+
+/*
+ * BPF ancestor-cgroup helpers use an absolute level from the hierarchy root.
+ * The 4.9 cgroup CSS parent pointer provides the same walk without changing
+ * the cgroup structure layout.
+ */
+static inline struct cgroup *cgroup_ancestor(struct cgroup *cgrp,
+                                             int ancestor_level)
+{
+	if (!cgrp || ancestor_level < 0 || ancestor_level > cgrp->level)
+		return NULL;
+
+	while (cgrp->level > ancestor_level) {
+		if (!cgrp->self.parent || !cgrp->self.parent->cgroup)
+			return NULL;
+		cgrp = cgrp->self.parent->cgroup;
+	}
+
+	return cgrp;
+}
+
+/*
+ * Linux 4.9 exports sock_gen_cookie(); newer BPF code calls its internal
+ * alias __sock_gen_cookie().
+ */
+static inline u64 __sock_gen_cookie(struct sock *sk)
+{
+	return sock_gen_cookie(sk);
+}
+
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) */
 
 #endif /* BPF_BACKPORT_H */

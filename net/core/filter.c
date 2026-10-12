@@ -33,6 +33,7 @@
 #include <linux/if_packet.h>
 #include <linux/if_arp.h>
 #include <linux/gfp.h>
+#include <linux/percpu.h>
 #include <net/inet_common.h>
 #include <net/ip.h>
 #include <net/arp.h>
@@ -66,6 +67,7 @@
 #include <net/udp.h>
 #include <linux/bpf_trace.h>
 #include <net/xdp.h>
+#include <trace/events/xdp.h>
 #include <net/xdp_sock.h>
 #include <net/inet_hashtables.h>
 #include <net/inet6_hashtables.h>
@@ -4511,13 +4513,11 @@ bpf_get_skb_set_tunnel_proto(enum bpf_func_id which)
 	if (!md_dst) {
     struct metadata_dst __percpu *tmp;
 
-		tmp = metadata_dst_alloc_percpu(IP_TUNNEL_OPTS_MAX,
-						METADATA_IP_TUNNEL,
-						GFP_KERNEL);
+		tmp = metadata_dst_alloc_percpu(IP_TUNNEL_OPTS_MAX, GFP_KERNEL);
 		if (!tmp)
 			return NULL;
 		if (cmpxchg(&md_dst, NULL, tmp))
-			metadata_dst_free_percpu(tmp);
+			free_percpu(tmp);
 	}
 
 	switch (which) {
@@ -4821,10 +4821,13 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 			sk->sk_sndbuf = max_t(int, val * 2, SOCK_MIN_SNDBUF);
 			break;
 		case SO_MAX_PACING_RATE:
+			/* sk_pacing_status is not present in Linux 4.9. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			if (val != ~0U)
 				cmpxchg(&sk->sk_pacing_status,
 					SK_PACING_NONE,
 					SK_PACING_NEEDED);
+#endif
 			sk->sk_max_pacing_rate = val;
 			sk->sk_pacing_rate = min(sk->sk_pacing_rate,
 						 sk->sk_max_pacing_rate);
