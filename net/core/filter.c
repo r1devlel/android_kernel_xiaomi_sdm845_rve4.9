@@ -4864,12 +4864,31 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 				ifindex = dev->ifindex;
 				dev_put(dev);
 			}
+			/* sock_bindtoindex() was added after Linux 4.9. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			ret = sock_bindtoindex(sk, ifindex, false);
+#else
+			sk->sk_bound_dev_if = ifindex;
+			sk_dst_reset(sk);
+			ret = 0;
+#endif
 			break;
 		case SO_KEEPALIVE:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			if (sk->sk_prot->keepalive)
 				sk->sk_prot->keepalive(sk, valbool);
 			sock_valbool_flag(sk, SOCK_KEEPOPEN, valbool);
+#else
+#ifdef CONFIG_INET
+			if (sk->sk_protocol == IPPROTO_TCP &&
+			    sk->sk_type == SOCK_STREAM)
+				tcp_set_keepalive(sk, valbool);
+#endif
+			if (valbool)
+				sock_set_flag(sk, SOCK_KEEPOPEN);
+			else
+				sock_reset_flag(sk, SOCK_KEEPOPEN);
+#endif
 			break;
 		default:
 			ret = -EINVAL;
@@ -4927,11 +4946,17 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 			strncpy(name, optval, min_t(long, optlen,
 						    TCP_CA_NAME_MAX-1));
 			name[TCP_CA_NAME_MAX-1] = 0;
+			#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			ret = tcp_set_congestion_control(sk, name, false, true);
+#else
+			ret = tcp_set_congestion_control(sk, name);
+#endif
 		} else {
 			struct inet_connection_sock *icsk = inet_csk(sk);
 			struct tcp_sock *tp = tcp_sk(sk);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			unsigned long timeout;
+#endif
 
 			if (optlen != sizeof(int))
 				return -EINVAL;
@@ -4953,6 +4978,7 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 					tp->snd_ssthresh = val;
 				}
 				break;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			case TCP_BPF_DELACK_MAX:
 				timeout = usecs_to_jiffies(val);
 				if (timeout > TCP_DELACK_MAX ||
@@ -4967,6 +4993,7 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 					return -EINVAL;
 				inet_csk(sk)->icsk_rto_min = timeout;
 				break;
+#endif
 			case TCP_SAVE_SYN:
 				if (val < 0 || val > 1)
 					ret = -EINVAL;
@@ -4974,7 +5001,26 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 					tp->save_syn = val;
 				break;
 			case TCP_KEEPIDLE:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 				ret = tcp_sock_set_keepidle_locked(sk, val);
+#else
+				if (val < 1 || val > MAX_TCP_KEEPIDLE) {
+					ret = -EINVAL;
+				} else {
+					tp->keepalive_time = val * HZ;
+					if (sock_flag(sk, SOCK_KEEPOPEN) &&
+					    !((1 << sk->sk_state) &
+					      (TCPF_CLOSE | TCPF_LISTEN))) {
+						u32 elapsed = keepalive_time_elapsed(tp);
+
+						if (tp->keepalive_time > elapsed)
+							elapsed = tp->keepalive_time - elapsed;
+						else
+							elapsed = 0;
+						inet_csk_reset_keepalive_timer(sk, elapsed);
+					}
+				}
+#endif
 				break;
 			case TCP_KEEPINTVL:
 				if (val < 1 || val > MAX_TCP_KEEPINTVL)
@@ -5040,11 +5086,18 @@ static int _bpf_getsockopt(struct sock *sk, int level, int optname,
 			break;
 		case TCP_SAVED_SYN:
 			tp = tcp_sk(sk);
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			if (optlen <= 0 || !tp->saved_syn ||
 			    optlen > tcp_saved_syn_len(tp->saved_syn))
 				goto err_clear;
 			memcpy(optval, tp->saved_syn->data, optlen);
+#else
+			/* Linux 4.9 stores [length, packet bytes...] in u32[]. */
+			if (optlen <= 0 || !tp->saved_syn ||
+			    optlen > tp->saved_syn[0])
+				goto err_clear;
+			memcpy(optval, &tp->saved_syn[1], optlen);
+#endif
 			break;
 		default:
 			goto err_clear;
@@ -5160,11 +5213,26 @@ static int bpf_sock_ops_get_syn(struct bpf_sock_ops_kern *bpf_sock,
 		} else {
 			/* optname == TCP_BPF_SYN_MAC */
 			hdr_start = skb_mac_header(syn_skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 			ret = skb_mac_header_len(syn_skb) +
 				skb_network_header_len(syn_skb) +
 				tcp_hdrlen(syn_skb);
+#else
+			ret = (syn_skb->network_header - syn_skb->mac_header) +
+				skb_network_header_len(syn_skb) +
+				tcp_hdrlen(syn_skb);
+#endif
 		}
 	} else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/*
+		 * Linux 4.9 keeps saved SYN bytes without the per-header
+		 * offsets used by the newer struct saved_syn. The live
+		 * syn_skb path above remains supported; return unavailable
+		 * rather than mis-slicing retransmit data.
+		 */
+		return -ENOENT;
+#else
 		struct sock *sk = bpf_sock->sk;
 		struct saved_syn *saved_syn;
 
@@ -5201,7 +5269,7 @@ static int bpf_sock_ops_get_syn(struct bpf_sock_ops_kern *bpf_sock,
 			ret = saved_syn->mac_hdrlen +
 				saved_syn->network_hdrlen +
 				saved_syn->tcp_hdrlen;
-		}
+		}#endif
 	}
 
 	*start = hdr_start;
