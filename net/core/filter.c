@@ -1602,7 +1602,7 @@ int sk_attach_bpf(u32 ufd, struct sock *sk)
 
 int sk_reuseport_attach_bpf(u32 ufd, struct sock *sk)
 {
-	struct bpf_prog *prog;
+	struct bpf_prog *prog, *old_prog;
 	int err;
 
 	if (sock_flag(sk, SOCK_FILTER_LOCKED))
@@ -1637,11 +1637,14 @@ int sk_reuseport_attach_bpf(u32 ufd, struct sock *sk)
 		}
 	}
 
-	err = reuseport_attach_prog(sk, prog);
-err_prog_put:
-	if (err)
-		bpf_prog_put(prog);
+	/* Kernel 4.9 returns the replaced program, not an error code. */
+	old_prog = reuseport_attach_prog(sk, prog);
+	if (old_prog)
+		sk_reuseport_prog_free(old_prog);
+	return 0;
 
+err_prog_put:
+	bpf_prog_put(prog);
 	return err;
 }
 
