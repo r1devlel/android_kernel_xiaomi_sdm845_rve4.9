@@ -203,4 +203,14 @@ static inline u64 __sock_gen_cookie(struct sock *sk)
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) */
 
+
+/* Linux 4.9 compatibility constants/helpers used by the BPF port. */
+#ifndef NO_QUEUE_MAPPING
+#define NO_QUEUE_MAPPING 0xffff
+#endif
+
+#ifndef sizeof_field
+#define sizeof_field(TYPE, MEMBER) sizeof(((TYPE *)0)->MEMBER)
+#endif
+
 #endif /* BPF_BACKPORT_H */
