@@ -5054,7 +5054,6 @@ static int _bpf_setsockopt(struct sock *sk, int level, int optname,
 				ret = -EINVAL;
 			}
 		}
-		ret = -EINVAL;
 #endif
 	} else {
 		ret = -EINVAL;
