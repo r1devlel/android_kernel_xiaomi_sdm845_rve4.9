@@ -8474,21 +8474,13 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 				       target_size));
 		break;
 	case offsetof(struct bpf_sock, rx_queue_mapping):
-#ifdef CONFIG_XPS
-		*insn++ = BPF_LDX_MEM(
-			BPF_FIELD_SIZEOF(struct sock, sk_rx_queue_mapping),
-			si->dst_reg, si->src_reg,
-			bpf_target_off(struct sock, sk_rx_queue_mapping,
-				       sizeof_field(struct sock,
-						    sk_rx_queue_mapping),
-				       target_size));
-		*insn++ = BPF_JMP_IMM(BPF_JNE, si->dst_reg, NO_QUEUE_MAPPING,
-				      1);
-		*insn++ = BPF_MOV64_IMM(si->dst_reg, -1);
-#else
+		/*
+		 * Linux 4.9 has no sk_rx_queue_mapping member in struct sock.
+		 * Report the unsupported mapping as -1, matching the no-mapping
+		 * result used by the newer implementation.
+		 */
 		*insn++ = BPF_MOV64_IMM(si->dst_reg, -1);
 		*target_size = 2;
-#endif
 		break;
 	}
 
@@ -8699,13 +8691,45 @@ static u32 sock_addr_convert_ctx_access(enum bpf_access_type type,
 		break;
 
 	case offsetof(struct bpf_sock_addr, type):
-		SOCK_ADDR_LOAD_NESTED_FIELD(struct bpf_sock_addr_kern,
-					    struct sock, sk, sk_type);
+		*insn++ = BPF_LDX_MEM(
+			BPF_FIELD_SIZEOF(struct bpf_sock_addr_kern, sk),
+			si->dst_reg, si->src_reg,
+			offsetof(struct bpf_sock_addr_kern, sk));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/* sk_type is the upper 16 bits of the 4.9 sock bitfield word. */
+		*target_size = sizeof(u16);
+		*insn++ = BPF_LDX_MEM(BPF_H, si->dst_reg, si->dst_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(unsigned int) + 2);
+#else
+		*insn++ = BPF_LDX_MEM(
+			BPF_FIELD_SIZEOF(struct sock, sk_type),
+			si->dst_reg, si->dst_reg,
+			bpf_target_off(struct sock, sk_type,
+				       sizeof_field(struct sock, sk_type),
+				       target_size));
+#endif
 		break;
 
 	case offsetof(struct bpf_sock_addr, protocol):
-		SOCK_ADDR_LOAD_NESTED_FIELD(struct bpf_sock_addr_kern,
-					    struct sock, sk, sk_protocol);
+		*insn++ = BPF_LDX_MEM(
+			BPF_FIELD_SIZEOF(struct bpf_sock_addr_kern, sk),
+			si->dst_reg, si->src_reg,
+			offsetof(struct bpf_sock_addr_kern, sk));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/* sk_protocol is the byte below sk_type in the 4.9 bitfield word. */
+		*target_size = sizeof(u8);
+		*insn++ = BPF_LDX_MEM(BPF_B, si->dst_reg, si->dst_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(unsigned int) + 1);
+#else
+		*insn++ = BPF_LDX_MEM(
+			BPF_FIELD_SIZEOF(struct sock, sk_protocol),
+			si->dst_reg, si->dst_reg,
+			bpf_target_off(struct sock, sk_protocol,
+				       sizeof_field(struct sock, sk_protocol),
+				       target_size));
+#endif
 		break;
 
 	case offsetof(struct bpf_sock_addr, msg_src_ip4):
