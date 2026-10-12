@@ -1775,6 +1775,19 @@ void sock_efree(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(sock_efree);
 
+#ifdef CONFIG_INET
+/*
+ * Release a socket reference held for an skb assigned by BPF.
+ * Unlike sock_efree(), use sock_gen_put() for non-full sockets too.
+ */
+void sock_pfree(struct sk_buff *skb)
+{
+	if (!sock_flag(skb->sk, SOCK_RCU_FREE))
+		sock_gen_put(skb->sk);
+}
+EXPORT_SYMBOL(sock_pfree);
+#endif
+
 kuid_t sock_i_uid(struct sock *sk)
 {
 	kuid_t uid;
