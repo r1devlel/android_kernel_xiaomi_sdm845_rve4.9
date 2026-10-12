@@ -6009,9 +6009,16 @@ u32 bpf_tcp_sock_convert_ctx_access(enum bpf_access_type type,
 	case offsetof(struct bpf_tcp_sock, delivered):
 		BPF_TCP_SOCK_GET_COMMON(delivered);
 		break;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	case offsetof(struct bpf_tcp_sock, delivered_ce):
+		/* Linux 4.9 does not track ECN-marked delivered packets. */
+		*insn++ = BPF_MOV64_IMM(si->dst_reg, 0);
+		break;
+#else
 	case offsetof(struct bpf_tcp_sock, delivered_ce):
 		BPF_TCP_SOCK_GET_COMMON(delivered_ce);
 		break;
+#endif
 	case offsetof(struct bpf_tcp_sock, icsk_retransmits):
 		BPF_INET_SOCK_GET_COMMON(icsk_retransmits);
 		break;
@@ -8347,21 +8354,41 @@ u32 bpf_sock_convert_ctx_access(enum bpf_access_type type,
 		break;
 
 	case offsetof(struct bpf_sock, type):
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		/*
+		 * Linux 4.9 packs sk_type and sk_protocol into a shared
+		 * unsigned-int bitfield word. Read the corresponding
+		 * halfword/byte instead of applying sizeof/offsetof to
+		 * individual bitfields.
+		 */
+		*target_size = sizeof(u16);
+		*insn++ = BPF_LDX_MEM(BPF_H, si->dst_reg, si->src_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(unsigned int) + 2);
+#else
 		*insn++ = BPF_LDX_MEM(
 			BPF_FIELD_SIZEOF(struct sock, sk_type),
 			si->dst_reg, si->src_reg,
 			bpf_target_off(struct sock, sk_type,
 				       sizeof_field(struct sock, sk_type),
 				       target_size));
+#endif
 		break;
 
 	case offsetof(struct bpf_sock, protocol):
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		*target_size = sizeof(u8);
+		*insn++ = BPF_LDX_MEM(BPF_B, si->dst_reg, si->src_reg,
+				      offsetof(struct sock, sk_wmem_queued) -
+				      sizeof(unsigned int) + 1);
+#else
 		*insn++ = BPF_LDX_MEM(
 			BPF_FIELD_SIZEOF(struct sock, sk_protocol),
 			si->dst_reg, si->src_reg,
 			bpf_target_off(struct sock, sk_protocol,
 				       sizeof_field(struct sock, sk_protocol),
 				       target_size));
+#endif
 		break;
 
 	case offsetof(struct bpf_sock, src_ip4):
