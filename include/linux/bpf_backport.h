@@ -80,11 +80,19 @@ static inline bool skb_is_gso_tcp(const struct sk_buff *skb)
  * Adjusts gso_size after modifications to packet length
  */
 static inline void skb_decrease_gso_size(struct skb_shared_info *shinfo,
-					 u32 len_diff)
+					 u16 decrement)
 {
-	/* Safely reduce the GSO size if needed */
-	if (shinfo->gso_size > len_diff)
-		shinfo->gso_size -= len_diff;
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size -= decrement;
+}
+
+static inline void skb_increase_gso_size(struct skb_shared_info *shinfo,
+					 u16 increment)
+{
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size += increment;
 }
 
 #endif /* KERNEL_VERSION < 5.1.0 */

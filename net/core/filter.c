@@ -35,6 +35,8 @@
 #include <linux/gfp.h>
 #include <net/inet_common.h>
 #include <net/ip.h>
+#include <net/arp.h>
+#include <net/route.h>
 #include <net/protocol.h>
 #include <net/netlink.h>
 #include <linux/skbuff.h>
@@ -63,6 +65,7 @@
 #include <net/xfrm.h>
 #include <net/udp.h>
 #include <linux/bpf_trace.h>
+#include <net/xdp.h>
 #include <net/xdp_sock.h>
 #include <net/inet_hashtables.h>
 #include <net/inet6_hashtables.h>
@@ -2303,6 +2306,32 @@ static int __bpf_redirect_neigh_v6(struct sk_buff *skb, struct net_device *dev,
 #endif /* CONFIG_IPV6 */
 
 #if IS_ENABLED(CONFIG_INET)
+/*
+ * Linux 4.9 route structures only carry an IPv4 gateway in rtable.
+ * Resolve that gateway (or the final destination for on-link routes)
+ * through the legacy ARP neighbour table.
+ */
+static inline struct neighbour *ip_neigh_gw4(struct net_device *dev,
+					     __be32 daddr)
+{
+	struct neighbour *neigh;
+
+	neigh = __ipv4_neigh_lookup_noref(dev, daddr);
+	if (unlikely(!neigh))
+		neigh = __neigh_create(&arp_tbl, &daddr, dev, false);
+
+	return neigh;
+}
+
+static inline struct neighbour *ip_neigh_for_gw(struct rtable *rt,
+						struct sk_buff *skb,
+						bool *is_v6gw)
+{
+	*is_v6gw = false;
+	return ip_neigh_gw4(rt->dst.dev,
+			    rt_nexthop(rt, ip_hdr(skb)->daddr));
+}
+
 static int bpf_out_neigh_v4(struct net *net, struct sk_buff *skb,
 			    struct net_device *dev, struct bpf_nh_params *nh)
 {
@@ -2503,6 +2532,7 @@ int skb_do_redirect(struct sk_buff *skb)
 	if (unlikely(!dev))
 		goto out_drop;
 	if (flags & BPF_F_PEER) {
+#if __ndo_get_peer_dev_available
 		const struct net_device_ops *ops = dev->netdev_ops;
 
 		if (unlikely(!ops->ndo_get_peer_dev ||
@@ -2515,6 +2545,10 @@ int skb_do_redirect(struct sk_buff *skb)
 			goto out_drop;
 		skb->dev = dev;
 		return -EAGAIN;
+#else
+		/* Linux 4.9 has no peer-device netdev operation. */
+		goto out_drop;
+#endif
 	}
 	return flags & BPF_F_NEIGH ?
 	       __bpf_redirect_neigh(skb, dev, flags & BPF_F_NEXTHOP ?
