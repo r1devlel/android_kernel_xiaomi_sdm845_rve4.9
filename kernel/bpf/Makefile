@@ -6,7 +6,7 @@ obj-$(CONFIG_BPF_SYSCALL) += hashtab.o arraymap.o percpu_freelist.o bpf_lru_list
 obj-$(CONFIG_BPF_SYSCALL) += bpf_iter.o map_iter.o offload.o lpm_trie.o queue_stack_maps.o ringbuf.o
 obj-$(CONFIG_INET) += reuseport_array.o
 obj-$(CONFIG_BPF_JIT) += bpf_struct_ops.o
-obj-$(CONFIG_BPF_JIT) += trampoline.o
+obj-$(CONFIG_BPF_JIT) += trampoline.o dispatcher.o
 ifeq ($(CONFIG_PERF_EVENTS),y)
 obj-$(CONFIG_BPF_SYSCALL) += stackmap.o
 endif
