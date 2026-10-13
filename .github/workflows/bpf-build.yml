@@ -59,6 +59,30 @@ jobs:
             LLVM_IAS=0 \
             V=1
 
+      - name: Diagnose unresolved kernel symbols
+        if: always()
+        run: |
+          echo "=== CONFIG_TASKS_RCU in out/.config ==="
+          grep -nE '^(CONFIG_TASKS_RCU=|# CONFIG_TASKS_RCU is not set)' out/.config || true
+          echo "=== CONFIG_TASKS_RCU in generated auto.conf ==="
+          grep -nE 'CONFIG_TASKS_RCU' out/include/config/auto.conf || true
+          echo "=== RCU object symbol table ==="
+          if test -f out/kernel/rcu/update.o; then
+            llvm-nm-18 out/kernel/rcu/update.o | grep -E 'call_rcu_tasks|rcu_tasks' || true
+          else
+            echo "out/kernel/rcu/update.o is missing"
+          fi
+          echo "=== BPF trampoline unresolved references ==="
+          if test -f out/kernel/bpf/trampoline.o; then
+            llvm-nm-18 out/kernel/bpf/trampoline.o | grep -E 'call_rcu_tasks|bpf_dispatcher_change_prog' || true
+          else
+            echo "out/kernel/bpf/trampoline.o is missing"
+          fi
+          echo "=== Relevant built objects ==="
+          for f in out/kernel/bpf/dispatcher.o out/net/core/xdp.o out/net/core/filter.o out/net/ipv4/bpf_tcp_ca.o out/net/bpf/test_run.o; do
+            if test -f "$f"; then echo "PRESENT $f"; else echo "MISSING $f"; fi
+          done
+
       - name: Check output
         run: |
           test -s out/arch/arm64/boot/Image
