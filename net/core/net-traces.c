@@ -29,6 +29,7 @@
 #include <trace/events/skb.h>
 #include <trace/events/net.h>
 #include <trace/events/napi.h>
+#include <trace/events/xdp.h>
 #include <trace/events/sock.h>
 #include <trace/events/udp.h>
 #include <trace/events/fib.h>
