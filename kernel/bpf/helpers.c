@@ -231,9 +231,9 @@ const struct bpf_func_proto *bpf_base_func_proto(enum bpf_func_id func_id)
 
 
 /*
- * Backport the bounded integer parsing helpers used by modern BPF programs.
- * Keep parsing bounded by buf_len: BPF callers do not pass a NUL-terminated
- * string contract.
+ * Bounded integer parsing for BPF programs on this 4.9 kernel.
+ * Unlike kstrto*(), the BPF helpers parse a byte buffer that need not
+ * be NUL-terminated and return the number of bytes consumed.
  */
 #define BPF_STRTOX_BASE_MASK 0x1F
 
@@ -241,43 +241,72 @@ static int __bpf_strtoull(const char *buf, size_t buf_len, u64 flags,
                           unsigned long long *res, bool *is_negative)
 {
         unsigned int base = flags & BPF_STRTOX_BASE_MASK;
-        const char *cur_buf = buf;
-        size_t cur_len = buf_len;
-        unsigned int consumed;
-        size_t val_len;
-        char str[64];
+        unsigned long long value = 0;
+        const char *p = buf;
+        const char *end;
+        unsigned int digit;
+        size_t consumed;
+        bool negative = false;
 
         if (!buf || !buf_len || !res || !is_negative)
                 return -EINVAL;
-        if (base != 0 && base != 8 && base != 10 && base != 16)
-                return -EINVAL;
         if (flags & ~BPF_STRTOX_BASE_MASK)
                 return -EINVAL;
-
-        while (cur_buf < buf + buf_len && isspace(*cur_buf))
-                ++cur_buf;
-        *is_negative = cur_buf < buf + buf_len && *cur_buf == '-';
-        if (*is_negative)
-                ++cur_buf;
-
-        consumed = cur_buf - buf;
-        cur_len -= consumed;
-        if (!cur_len)
+        if (base && base != 8 && base != 10 && base != 16)
                 return -EINVAL;
 
-        cur_len = min(cur_len, sizeof(str) - 1);
-        memcpy(str, cur_buf, cur_len);
-        str[cur_len] = '\0';
-        cur_buf = str;
-        cur_buf = _parse_integer_fixup_radix(cur_buf, &base);
-        val_len = _parse_integer(cur_buf, base, res);
-        if (val_len & KSTRTOX_OVERFLOW)
-                return -ERANGE;
-        if (!val_len)
+        end = buf + buf_len;
+        while (p < end && isspace((unsigned char)*p))
+                p++;
+        if (p < end && (*p == '-' || *p == '+')) {
+                negative = *p == '-';
+                p++;
+        }
+
+        if (!base) {
+                base = 10;
+                if (p < end && *p == '0') {
+                        if (p + 1 < end && (p[1] == 'x' || p[1] == 'X')) {
+                                base = 16;
+                                p += 2;
+                        } else {
+                                base = 8;
+                        }
+                }
+        } else if (base == 16 && p + 1 < end && p[0] == '0' &&
+                   (p[1] == 'x' || p[1] == 'X')) {
+                p += 2;
+        }
+
+        consumed = p - buf;
+        if (p == end)
                 return -EINVAL;
-        cur_buf += val_len;
-        consumed += cur_buf - str;
-        return consumed;
+
+        while (p < end) {
+                unsigned char c = *p;
+
+                if (c >= '0' && c <= '9')
+                        digit = c - '0';
+                else if (c >= 'a' && c <= 'f')
+                        digit = c - 'a' + 10;
+                else if (c >= 'A' && c <= 'F')
+                        digit = c - 'A' + 10;
+                else
+                        break;
+
+                if (digit >= base)
+                        break;
+                if (value > (ULLONG_MAX - digit) / base)
+                        return -ERANGE;
+                value = value * base + digit;
+                p++;
+        }
+
+        if (p == buf + consumed)
+                return -EINVAL;
+        *res = value;
+        *is_negative = negative;
+        return p - buf;
 }
 
 static int __bpf_strtoll(const char *buf, size_t buf_len, u64 flags,
@@ -291,11 +320,12 @@ static int __bpf_strtoll(const char *buf, size_t buf_len, u64 flags,
         if (err < 0)
                 return err;
         if (is_negative) {
-                if ((long long)-value > 0)
+                if (value > (unsigned long long)LLONG_MAX + 1ULL)
                         return -ERANGE;
-                *res = -value;
+                *res = value == (unsigned long long)LLONG_MAX + 1ULL ?
+                       LLONG_MIN : -(long long)value;
         } else {
-                if ((long long)value < 0)
+                if (value > LLONG_MAX)
                         return -ERANGE;
                 *res = value;
         }
@@ -310,8 +340,6 @@ BPF_CALL_4(bpf_strtol, const char *, buf, size_t, buf_len, u64, flags,
 
         if (err < 0)
                 return err;
-        if (value != (long)value)
-                return -ERANGE;
         *res = value;
         return err;
 }
@@ -338,7 +366,7 @@ BPF_CALL_4(bpf_strtoul, const char *, buf, size_t, buf_len, u64, flags,
                 return err;
         if (is_negative)
                 return -EINVAL;
-        if (value != (unsigned long)value)
+        if (value > ULONG_MAX)
                 return -ERANGE;
         *res = value;
         return err;
