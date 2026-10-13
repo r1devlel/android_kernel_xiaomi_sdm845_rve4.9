@@ -128,3 +128,16 @@ void bpf_prog_offload_replace_insn(struct bpf_verifier_env *env, u32 off,
 
 const struct bpf_prog_ops bpf_offload_prog_ops = {
 };
+
+/* This kernel has no device-offload verifier backend. */
+int bpf_prog_offload_verify_insn(struct bpf_verifier_env *env,
+				 int insn_idx, int prev_insn_idx)
+{
+	return -EOPNOTSUPP;
+}
+
+/* Offloaded instruction rewriting is unsupported in this 4.9 tree. */
+void bpf_prog_offload_remove_insns(struct bpf_verifier_env *env,
+				   u32 off, u32 cnt)
+{
+}
